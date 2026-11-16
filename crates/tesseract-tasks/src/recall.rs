@@ -48,7 +48,10 @@ pub struct Recall {
 
 /// Positions of a key: domains 0 to 3.
 pub fn key_mask() -> Entity {
-    Entity::domain_mask(0) | Entity::domain_mask(1) | Entity::domain_mask(2) | Entity::domain_mask(3)
+    Entity::domain_mask(0)
+        | Entity::domain_mask(1)
+        | Entity::domain_mask(2)
+        | Entity::domain_mask(3)
 }
 
 /// Positions of a value: domain 4.

@@ -161,9 +161,11 @@ impl Model for UnitModel {
         if error_rising {
             report.skipped = true;
         } else {
-            report.connections_pruned =
-                self.unit
-                    .prune(&self.params, policy.connection_budget, policy.min_live_inputs);
+            report.connections_pruned = self.unit.prune(
+                &self.params,
+                policy.connection_budget,
+                policy.min_live_inputs,
+            );
         }
         report
     }

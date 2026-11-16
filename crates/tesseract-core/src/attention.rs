@@ -106,7 +106,8 @@ pub struct AttentionHead {
 fn agreement(query: &Token, candidate: &Token) -> Entity {
     let mut out = Entity::ZERO;
     for w in 0..WORDS {
-        out.0[w] = !(query.bits.0[w] ^ candidate.bits.0[w]) & query.known.0[w] & candidate.known.0[w];
+        out.0[w] =
+            !(query.bits.0[w] ^ candidate.bits.0[w]) & query.known.0[w] & candidate.known.0[w];
     }
     out
 }
@@ -233,7 +234,12 @@ impl AttentionHead {
 
     /// Error-driven learning from one example: the context (query last)
     /// and the wanted bits of the output state.
-    pub fn learn(&mut self, context: &[Token], target: &Entity, target_mask: &Entity) -> HeadUpdate {
+    pub fn learn(
+        &mut self,
+        context: &[Token],
+        target: &Entity,
+        target_mask: &Entity,
+    ) -> HeadUpdate {
         let mut update = HeadUpdate::default();
         let Some((query, candidates)) = context.split_last() else {
             return update;
@@ -295,7 +301,12 @@ impl AttentionHead {
             let lose = loser.map_or(Entity::ZERO, |l| agreement(query, &candidates[l]) & allowed);
             let plus = win.and_not(&lose);
             let minus = lose.and_not(&win);
-            accumulate(&mut self.match_counters, &plus, &minus, self.params.matching.limit);
+            accumulate(
+                &mut self.match_counters,
+                &plus,
+                &minus,
+                self.params.matching.limit,
+            );
             let mut sign = Entity::ONES;
             update.growth.add(grow(
                 &self.match_counters,
@@ -317,7 +328,12 @@ impl AttentionHead {
             let zeros = writable.and_not(&c.bits);
             let plus = (ones & up) | (zeros & down);
             let minus = (ones & down) | (zeros & up);
-            accumulate(&mut self.value_counters, &plus, &minus, self.params.value.limit);
+            accumulate(
+                &mut self.value_counters,
+                &plus,
+                &minus,
+                self.params.value.limit,
+            );
             let mut sign = Entity::ONES;
             update.growth.add(grow(
                 &self.value_counters,
@@ -433,15 +449,14 @@ mod tests {
 
     #[test]
     fn min_score_can_select_nothing() {
-        let mut rng = Rng::new(44);
-        let mut params = AttentionParams::default();
-        params.min_score = 5000;
-        let head = AttentionHead::new(params);
+        let head = AttentionHead::new(AttentionParams {
+            min_score: 5000,
+            ..AttentionParams::default()
+        });
         let scores = vec![10, 4000, 4096];
         assert_eq!(head.select(&scores), None);
         let head = AttentionHead::new(AttentionParams::default());
         assert_eq!(head.select(&scores), Some(2));
         assert_eq!(head.select(&[7, 7, 3]), Some(0));
-        let _ = rng.next_u64();
     }
 }

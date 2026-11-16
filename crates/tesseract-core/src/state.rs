@@ -188,7 +188,7 @@ mod tests {
         }
         assert_eq!(a, b);
         assert!(a.0.iter().all(|v| v.abs() <= STATE_LIMIT));
-        assert!(a.0.iter().any(|v| *v == STATE_LIMIT));
+        assert!(a.0.contains(&STATE_LIMIT));
     }
 
     #[test]

@@ -41,7 +41,11 @@ pub fn activation(count: u32, live: u32, bias: i32) -> i32 {
 #[inline]
 pub fn threshold(live: u32, bias: i32) -> u32 {
     let need = live as i32 + bias;
-    if need <= 0 { 0 } else { ((need + 1) / 2) as u32 }
+    if need <= 0 {
+        0
+    } else {
+        ((need + 1) / 2) as u32
+    }
 }
 
 /// Learning settings of a unit's input connections.
@@ -155,7 +159,7 @@ impl Unit {
         let count = self.count(x);
         let a = activation(count, self.live, self.bias);
         let agree = x.xnor(&self.sign) & self.mask;
-        if a >= 0 && a < 2 {
+        if (0..2).contains(&a) {
             // Firing by the smallest margin: losing any agreeing input stops it.
             agree
         } else if (-2..0).contains(&a) {
@@ -193,7 +197,11 @@ impl Unit {
         if self.frozen {
             return update;
         }
-        let close = if out { a < params.margin } else { -a <= params.margin };
+        let close = if out {
+            a < params.margin
+        } else {
+            -a <= params.margin
+        };
         if out == desired && !close {
             return update;
         }

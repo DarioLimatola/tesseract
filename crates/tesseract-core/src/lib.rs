@@ -8,7 +8,7 @@
 //! - [`code`]: codes for a dimension (thermometer, category).
 //! - [`state`]: the integer state of a token.
 //! - [`counters`]: hidden learning counters and the ternary automaton.
-//! - [`unit`]: the ternary counting unit and its learning rule.
+//! - [`mod@unit`]: the ternary counting unit and its learning rule.
 //! - [`memory`]: the memory block (match-and-count over learned addresses).
 //! - [`attention`]: the attention head (match-and-count over the context).
 //! - [`structure`]: the structure policy (gentle pruning, dormant state).

@@ -307,8 +307,8 @@ impl MemoryBlock {
         let a = self.params.address.automaton;
         let known = input.known & self.params.input_mask;
         let counters = &mut self.addr_counters[u * BITS..(u + 1) * BITS];
-        for p in 0..BITS {
-            counters[p] = if !known.get(p) {
+        for (p, c) in counters.iter_mut().enumerate() {
+            *c = if !known.get(p) {
                 0
             } else if input.bits.get(p) {
                 a.live_at
@@ -338,8 +338,8 @@ impl MemoryBlock {
 
         let va = self.params.value;
         let counters = &mut self.value_counters[u * BITS..(u + 1) * BITS];
-        for p in 0..BITS {
-            counters[p] = if up.get(p) {
+        for (p, c) in counters.iter_mut().enumerate() {
+            *c = if up.get(p) {
                 va.live_at
             } else if down.get(p) {
                 -va.live_at
@@ -452,7 +452,11 @@ impl MemoryBlock {
             self.prune_cursor = (self.prune_cursor + 1) % n;
         }
         // Units: those idle for long enough become dormant, on a budget.
-        let mut active = self.state.iter().filter(|s| **s == UnitState::Active).count() as u32;
+        let mut active = self
+            .state
+            .iter()
+            .filter(|s| **s == UnitState::Active)
+            .count() as u32;
         for u in 0..n {
             if self.state[u] != UnitState::Active {
                 continue;

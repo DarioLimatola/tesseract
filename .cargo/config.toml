@@ -1,0 +1,13 @@
+# Build for the processor of this machine, so that bit counting uses its
+# native instructions (POPCNT, AVX2, AVX-512 where present).
+#
+# Measured on the memory block (4096 units, one token, one core):
+# 270 us with the portable baseline, 121 us at AVX2 level, 114 us with
+# AVX-512. See README, "Speed".
+#
+# This is an interim choice: a binary built here may not run on an older
+# processor. The plan is to choose the fast path at start-up instead
+# (engineering guidelines, performance item 4). Remove this file to get a
+# portable build.
+[build]
+rustflags = ["-C", "target-cpu=native"]

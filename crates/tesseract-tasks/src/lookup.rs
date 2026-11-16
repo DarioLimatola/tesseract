@@ -151,7 +151,9 @@ impl Lookup {
         // Distinct keys, and in every decoy domain distinct decoy codes.
         let mut keys: Vec<u8> = (0..s.keys as u16).map(|k| k as u8).collect();
         rng.shuffle(&mut keys);
-        let values: Vec<usize> = (0..n).map(|_| rng.below(s.values as u64) as usize).collect();
+        let values: Vec<usize> = (0..n)
+            .map(|_| rng.below(s.values as u64) as usize)
+            .collect();
         let decoy_ids: Vec<Vec<u8>> = self
             .decoy_codecs
             .iter()
@@ -287,14 +289,26 @@ mod tests {
                     .filter(|r| r.bits & d == q.bits & d)
                     .collect();
                 assert_eq!(hits.len(), 1);
-                assert_ne!(hits[0].bits & key, q.bits & key, "decoys point to wrong records");
+                assert_ne!(
+                    hits[0].bits & key,
+                    q.bits & key,
+                    "decoys point to wrong records"
+                );
             }
         }
         let b = task.baselines();
         assert_eq!(b[0].score, 1.0 / 16.0);
-        assert!(b[1].score > 0.05 && b[1].score < 0.35, "last value: {}", b[1].score);
+        assert!(
+            b[1].score > 0.05 && b[1].score < 0.35,
+            "last value: {}",
+            b[1].score
+        );
         // Matching on everything is misled by the decoys.
-        assert!(b[2].score > 0.1 && b[2].score < 0.6, "nearest record: {}", b[2].score);
+        assert!(
+            b[2].score > 0.1 && b[2].score < 0.6,
+            "nearest record: {}",
+            b[2].score
+        );
     }
 
     #[test]

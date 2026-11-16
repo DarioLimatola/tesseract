@@ -15,7 +15,10 @@ pub mod run;
 pub mod snapshot;
 
 pub use config::Config;
-pub use run::{Metrics, RunInfo, RunOutcome, list_snapshots, read_metrics, read_run_info, run};
+pub use run::{
+    Metrics, RunInfo, RunOutcome, create_run_dir, list_runs, list_snapshots, read_metrics,
+    read_run_info, run, run_in,
+};
 pub use snapshot::Snapshot;
 
 /// Errors of the runner.

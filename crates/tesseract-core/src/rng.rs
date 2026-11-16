@@ -37,7 +37,8 @@ impl Rng {
     /// advancing this one. Used to give tasks, codes and models their own
     /// reproducible streams.
     pub fn fork(&self, stream: u64) -> Self {
-        let mut sm = self.s[0] ^ self.s[2].rotate_left(17) ^ stream.wrapping_mul(0xD6E8_FEB8_6659_FD93);
+        let mut sm =
+            self.s[0] ^ self.s[2].rotate_left(17) ^ stream.wrapping_mul(0xD6E8_FEB8_6659_FD93);
         let s = [
             splitmix(&mut sm),
             splitmix(&mut sm),

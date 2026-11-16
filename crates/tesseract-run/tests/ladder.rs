@@ -6,7 +6,9 @@ use std::sync::atomic::AtomicBool;
 
 use tesseract_core::{Entity, WORDS};
 use tesseract_run::snapshot::UnitDetail;
-use tesseract_run::{Config, Metrics, RunOutcome, Snapshot, list_snapshots, read_metrics, read_run_info, run};
+use tesseract_run::{
+    Config, Metrics, RunOutcome, Snapshot, list_snapshots, read_metrics, read_run_info, run,
+};
 use tesseract_tasks::{Majority, MajoritySettings};
 
 fn config(file: &str, overrides: &[&str]) -> Config {
@@ -19,8 +21,10 @@ fn config(file: &str, overrides: &[&str]) -> Config {
 
 fn run_in(config: &Config, dir: &Path) -> (RunOutcome, Vec<Metrics>) {
     let mut seen = Vec::new();
-    let outcome = run(config, dir, &AtomicBool::new(false), &mut |m| seen.push(m.clone()))
-        .expect("run succeeds");
+    let outcome = run(config, dir, &AtomicBool::new(false), &mut |m| {
+        seen.push(m.clone())
+    })
+    .expect("run succeeds");
     (outcome, seen)
 }
 

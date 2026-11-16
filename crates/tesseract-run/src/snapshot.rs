@@ -68,9 +68,7 @@ pub struct UnitDetail {
 impl UnitDetail {
     /// Reads bit `p` of one of the entities of the detail.
     pub fn bit(words: &[u64], p: usize) -> bool {
-        words
-            .get(p >> 6)
-            .is_some_and(|w| (w >> (p & 63)) & 1 == 1)
+        words.get(p >> 6).is_some_and(|w| (w >> (p & 63)) & 1 == 1)
     }
 }
 
@@ -115,7 +113,12 @@ impl Snapshot {
         bytes.extend_from_slice(&SNAPSHOT_VERSION.to_le_bytes());
         let body = postcard::to_stdvec(self).map_err(|e| RunError::Format(e.to_string()))?;
         bytes.extend_from_slice(&body);
-        std::fs::write(path, bytes).map_err(|e| RunError::Io(format!("{}: {e}", path.display())))
+        // Write to a temporary name and rename, so that a reader watching
+        // the folder never sees half a file.
+        let tmp = path.with_extension("tmp");
+        let io = |e: std::io::Error| RunError::Io(format!("{}: {e}", path.display()));
+        std::fs::write(&tmp, bytes).map_err(io)?;
+        std::fs::rename(&tmp, path).map_err(io)
     }
 
     /// Reads a snapshot file.

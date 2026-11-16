@@ -292,7 +292,14 @@ mod tests {
         let (mut sign, mut mask, mut prot) = (Entity::ZERO, Entity::ZERO, Entity::ZERO);
         counters[1] = -9;
         counters[2] = 9;
-        let g = grow(&counters, &mut sign, &mut mask, &mut prot, &Entity::ONES, &a);
+        let g = grow(
+            &counters,
+            &mut sign,
+            &mut mask,
+            &mut prot,
+            &Entity::ONES,
+            &a,
+        );
         assert_eq!(g.revived, 1);
         assert!(!mask.get(1) && mask.get(2));
         // A live connection with negative evidence is the weakest candidate.

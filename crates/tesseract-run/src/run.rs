@@ -176,6 +176,22 @@ fn write_info(dir: &Path, info: &RunInfo) -> Result<(), RunError> {
     fs::write(&path, text).map_err(|e| io_err(&path, e))
 }
 
+/// Creates a new, empty run folder for a config under `out_root`:
+/// `<out_root>/<name>/<UTC time>`.
+pub fn create_run_dir(config: &Config, out_root: &Path) -> Result<PathBuf, RunError> {
+    let stamp = utc_stamp(SystemTime::now());
+    let parent = out_root.join(&config.name);
+    let mut dir = parent.join(&stamp);
+    let mut n = 2;
+    while dir.exists() {
+        dir = parent.join(format!("{stamp}-{n}"));
+        n += 1;
+    }
+    let snapshots = dir.join("snapshots");
+    fs::create_dir_all(&snapshots).map_err(|e| io_err(&snapshots, e))?;
+    Ok(dir)
+}
+
 /// Runs a config to the end of its budget, or until `stop` becomes true.
 ///
 /// Creates the run folder under `out_root` and calls `on_metrics` after
@@ -186,6 +202,19 @@ pub fn run(
     stop: &AtomicBool,
     on_metrics: &mut dyn FnMut(&Metrics),
 ) -> Result<RunOutcome, RunError> {
+    let dir = create_run_dir(config, out_root)?;
+    run_in(config, &dir, stop, on_metrics)
+}
+
+/// Like [`run`], in a run folder made by [`create_run_dir`]. A caller that
+/// wants to watch the folder while the run goes on creates it first.
+pub fn run_in(
+    config: &Config,
+    dir: &Path,
+    stop: &AtomicBool,
+    on_metrics: &mut dyn FnMut(&Metrics),
+) -> Result<RunOutcome, RunError> {
+    let dir = dir.to_path_buf();
     let mut task = config.build_task();
     let mut model = config.build_model();
     let policy = config.structure.policy();
@@ -197,15 +226,6 @@ pub fn run(
         .map(|b| (b.name, b.score))
         .collect();
 
-    // Run folder.
-    let stamp = utc_stamp(SystemTime::now());
-    let parent = out_root.join(&config.name);
-    let mut dir = parent.join(&stamp);
-    let mut n = 2;
-    while dir.exists() {
-        dir = parent.join(format!("{stamp}-{n}"));
-        n += 1;
-    }
     let snapshots = dir.join("snapshots");
     fs::create_dir_all(&snapshots).map_err(|e| io_err(&snapshots, e))?;
     let config_path = dir.join("config.toml");
@@ -215,7 +235,7 @@ pub fn run(
         seed: config.seed,
         engine_version: ENGINE_VERSION.to_string(),
         source_revision: source_revision(),
-        started_utc: stamp,
+        started_utc: utc_stamp(SystemTime::now()),
         task: task.name().to_string(),
         axes: task.axes().to_string(),
         status: "running".to_string(),
@@ -318,7 +338,9 @@ pub fn run(
             window = Window::default();
             clock = Instant::now();
         }
-        if config.budget.snapshot_every > 0 && step % config.budget.snapshot_every == 0 && !last_step
+        if config.budget.snapshot_every > 0
+            && step % config.budget.snapshot_every == 0
+            && !last_step
         {
             window.learning += clock.elapsed();
             save(model.as_ref(), step)?;
@@ -423,6 +445,23 @@ pub fn list_snapshots(dir: &Path) -> Vec<(u64, PathBuf)> {
         .collect();
     out.sort();
     out
+}
+
+/// Run folders under `out_root` (`<out_root>/<name>/<time>` with a
+/// `run.json`), newest first.
+pub fn list_runs(out_root: &Path) -> Vec<PathBuf> {
+    let mut runs: Vec<(String, PathBuf)> = Vec::new();
+    for name in fs::read_dir(out_root).into_iter().flatten().flatten() {
+        for run in fs::read_dir(name.path()).into_iter().flatten().flatten() {
+            let path = run.path();
+            if path.join("run.json").is_file() {
+                let stamp = run.file_name().to_string_lossy().into_owned();
+                runs.push((stamp, path));
+            }
+        }
+    }
+    runs.sort_by(|a, b| b.cmp(a));
+    runs.into_iter().map(|(_, p)| p).collect()
 }
 
 #[cfg(test)]

@@ -1,0 +1,28 @@
+[package]
+name = "tesseract-monitor"
+description = "Tesseract monitor: a local desktop window to set up a test, watch it and look at the neurons"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+name = "tesseract_monitor"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tesseract-monitor"
+path = "src/main.rs"
+
+[dependencies]
+tesseract-run.workspace = true
+eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
+clap = { version = "4", features = ["derive"] }
+png = "0.18"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

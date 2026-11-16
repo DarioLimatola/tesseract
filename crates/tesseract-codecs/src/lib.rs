@@ -71,7 +71,9 @@ impl Codec for ByteCodec {
     }
 
     fn encode(&self, item: &u8, token: &mut Token) {
-        token.bits.set_domain(self.domain, self.codes[usize::from(*item)]);
+        token
+            .bits
+            .set_domain(self.domain, self.codes[usize::from(*item)]);
         token.known = token.known | self.footprint();
     }
 
@@ -100,7 +102,11 @@ impl NumberCodec {
     /// An adapter for one dimension. `max` must be greater than `min`;
     /// otherwise the range is widened to one step.
     pub fn new(domain: usize, value: usize, min: i64, max: i64) -> Self {
-        let max = if max > min { max } else { min.saturating_add(1) };
+        let max = if max > min {
+            max
+        } else {
+            min.saturating_add(1)
+        };
         Self {
             domain,
             value,

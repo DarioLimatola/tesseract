@@ -60,11 +60,13 @@ fn main() -> ExitCode {
         set,
         threads,
     } = cli.command;
-    if let Some(n) = threads {
-        if let Err(e) = rayon::ThreadPoolBuilder::new().num_threads(n).build_global() {
-            eprintln!("error: threads: {e}");
-            return ExitCode::from(2);
-        }
+    if let Some(n) = threads
+        && let Err(e) = rayon::ThreadPoolBuilder::new()
+            .num_threads(n)
+            .build_global()
+    {
+        eprintln!("error: threads: {e}");
+        return ExitCode::from(2);
     }
     let config = match Config::load(&config, &set) {
         Ok(c) => c,

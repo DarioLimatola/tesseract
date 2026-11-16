@@ -373,7 +373,8 @@ fn per_mille(share: f64) -> u32 {
 impl Config {
     /// Reads a config from TOML text, applying `key.path=value` overrides.
     pub fn from_toml(text: &str, overrides: &[String]) -> Result<Self, RunError> {
-        let mut value: toml::Value = toml::from_str(text).map_err(|e| RunError::Config(e.to_string()))?;
+        let mut value: toml::Value =
+            toml::from_str(text).map_err(|e| RunError::Config(e.to_string()))?;
         for o in overrides {
             apply_override(&mut value, o)?;
         }
@@ -419,10 +420,10 @@ impl Config {
                 );
             }
         }
-        if let ModelConfig::Memory { units, .. } = &self.model {
-            if *units == 0 || *units > 1 << 20 {
-                return bad("model.units must be between 1 and 1048576");
-            }
+        if let ModelConfig::Memory { units, .. } = &self.model
+            && (*units == 0 || *units > 1 << 20)
+        {
+            return bad("model.units must be between 1 and 1048576");
         }
         Ok(())
     }
@@ -538,9 +539,9 @@ fn apply_override(root: &mut toml::Value, spec: &str) -> Result<(), RunError> {
     let mut node = root;
     let keys: Vec<&str> = path.trim().split('.').collect();
     for (i, key) in keys.iter().enumerate() {
-        let table = node
-            .as_table_mut()
-            .ok_or_else(|| RunError::Config(format!("override '{spec}': '{key}' is not in a table")))?;
+        let table = node.as_table_mut().ok_or_else(|| {
+            RunError::Config(format!("override '{spec}': '{key}' is not in a table"))
+        })?;
         if i + 1 == keys.len() {
             table.insert((*key).to_string(), parsed);
             return Ok(());
@@ -569,9 +570,8 @@ kind = "unit"
         let c = Config::from_toml(MINIMAL, &[]).unwrap();
         assert_eq!(c.seed, 1);
         assert_eq!(c.budget.steps, 10_000);
-        let explicit = format!(
-            "{MINIMAL}[model.inputs]\nlive_at = 64\ndormant_below = 32\nlimit = 512\n"
-        );
+        let explicit =
+            format!("{MINIMAL}[model.inputs]\nlive_at = 64\ndormant_below = 32\nlimit = 512\n");
         let c = Config::from_toml(
             &explicit,
             &[

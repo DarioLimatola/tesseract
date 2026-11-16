@@ -5,7 +5,7 @@ members = [
     "crates/tesseract-codecs",
     "crates/tesseract-tasks",
     "crates/tesseract-run",
-    #M
+    "crates/tesseract-monitor",
 ]
 
 [workspace.package]
