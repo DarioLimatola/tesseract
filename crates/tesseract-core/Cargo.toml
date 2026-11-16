@@ -3,6 +3,7 @@ name = "tesseract-core"
 description = "Tesseract engine: bit entities, counting units, blocks, learning and structure policy"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true

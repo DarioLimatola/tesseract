@@ -3,6 +3,7 @@ name = "tesseract-monitor"
 description = "Tesseract monitor: a local desktop window to set up a test, watch it and look at the neurons"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true

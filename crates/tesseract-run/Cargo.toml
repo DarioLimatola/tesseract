@@ -3,6 +3,7 @@ name = "tesseract-run"
 description = "Tesseract runner: one command on one config file, one run folder"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
