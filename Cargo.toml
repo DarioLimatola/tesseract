@@ -1,0 +1,38 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/tesseract-core",
+    "crates/tesseract-codecs",
+    "crates/tesseract-tasks",
+    "crates/tesseract-run",
+    #M
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/DarioLimatola/tesseract"
+authors = ["Dario Limatola"]
+
+[workspace.dependencies]
+tesseract-core = { path = "crates/tesseract-core" }
+tesseract-codecs = { path = "crates/tesseract-codecs" }
+tesseract-tasks = { path = "crates/tesseract-tasks" }
+tesseract-run = { path = "crates/tesseract-run" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+[profile.bench]
+inherits = "release"
+
+# Tests run the learning experiments, so they are built with optimisation.
+[profile.test]
+opt-level = 2
