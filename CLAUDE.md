@@ -12,7 +12,7 @@ Owner: Dario Limatola. Repository: `DarioLimatola/tesseract` (public by the owne
 
 ## Source of truth
 
-Design documents live in the claude.ai Project "Tesseract" (`claude/tesseract-*.md`). Reading order:
+Design documents are in `docs/` (copies of the claude.ai Project "Tesseract" docs, 2026-11-17). Reading order:
 
 1. `tesseract-design-notes.md` (entry point; wins on conflicts)
 2. `tesseract-data-structure.md`
@@ -21,7 +21,7 @@ Design documents live in the claude.ai Project "Tesseract" (`claude/tesseract-*.
 5. `tesseract-engineering-guidelines.md`
 6. `tesseract-prior-art-review.md` (reference)
 
-Copies of these documents belong in `docs/` in this repository once the owner confirms. Until then, do not invent decisions: label anything not confirmed as **Proposed**.
+Do not invent decisions: label anything not confirmed by the owner as **Proposed**. When a decision changes, update the matching file in `docs/`.
 
 Known superseded lines: guideline "64 examples per word" (a word now holds one dimension of one example); monitor is a desktop window, not a web server; test 11 (next byte) is replaced by the language ladder.
 
