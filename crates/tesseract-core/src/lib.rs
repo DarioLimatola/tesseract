@@ -30,7 +30,10 @@ pub mod unit;
 
 pub use attention::{AttentionHead, AttentionParams};
 pub use counters::Automaton;
-pub use entity::{Axis, BITS, DOMAIN_BITS, DOMAINS, Entity, SIDE, VALUES_PER_DOMAIN, WORDS};
+pub use entity::{
+    Axis, BITS, DIMENSION_BITS, DOMAIN_BITS, DOMAINS, Entity, LEVELS, LOG_SIDE, SIDE, WORDS,
+    WORDS_PER_DOMAIN,
+};
 pub use memory::{MemoryBlock, MemoryParams};
 pub use model::{
     AttentionModel, BlockView, MemoryModel, Model, StepReport, UnitModel, UnitView,

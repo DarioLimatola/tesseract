@@ -1,0 +1,53 @@
+[
+  {
+    "side": 2,
+    "levels": 7,
+    "bits": 128,
+    "tests": "FAIL",
+    "note": "error: test failed, to rerun pass `-p tesseract-codecs --lib`",
+    "seconds": 17
+  },
+  {
+    "side": 4,
+    "levels": 4,
+    "bits": 256,
+    "tests": "FAIL",
+    "note": "error: test failed, to rerun pass `-p tesseract-codecs --lib`",
+    "seconds": 17
+  },
+  {
+    "side": 8,
+    "levels": 3,
+    "bits": 512,
+    "tests": "FAIL",
+    "note": "error: test failed, to rerun pass `-p tesseract-codecs --lib`",
+    "seconds": 17
+  },
+  {
+    "side": 8,
+    "levels": 4,
+    "bits": 4096,
+    "tests": "pass",
+    "test1": 100.0,
+    "test2": 100.0,
+    "test2_noise30": 100.0,
+    "test3": 100.0,
+    "seconds": 92
+  },
+  {
+    "side": 16,
+    "levels": 3,
+    "bits": 4096,
+    "tests": "FAIL",
+    "note": "error: test failed, to rerun pass `-p tesseract-core --lib`",
+    "seconds": 11
+  },
+  {
+    "side": 8,
+    "levels": 5,
+    "bits": 32768,
+    "tests": "FAIL",
+    "note": "error: test failed, to rerun pass `-p tesseract-core --lib`",
+    "seconds": 17
+  }
+]

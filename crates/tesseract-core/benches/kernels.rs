@@ -9,15 +9,24 @@ use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use tesseract_core::counters::accumulate;
 use tesseract_core::unit::match_count;
 use tesseract_core::{
-    AttentionHead, AttentionParams, Axis, BITS, Entity, MemoryBlock, MemoryParams, Rng, State,
-    Token, Unit, UnitParams,
+    AttentionHead, AttentionParams, Axis, BITS, DOMAINS, Entity, MemoryBlock, MemoryParams, Rng,
+    State, Token, Unit, UnitParams,
 };
+
+/// Positions of a key and of a value, as the recall task lays them out.
+fn key_mask() -> Entity {
+    (0..DOMAINS / 2).fold(Entity::ZERO, |m, d| m | Entity::domain_mask(d))
+}
+
+fn value_mask() -> Entity {
+    Entity::domain_mask(DOMAINS - 1)
+}
 
 fn kernels(c: &mut Criterion) {
     let mut rng = Rng::new(1);
     let (x, sign, mask) = (rng.entity(), rng.entity(), rng.entity());
 
-    c.bench_function("entity/match_count (4096 connections)", |b| {
+    c.bench_function("entity/match_count (one entity)", |b| {
         b.iter(|| match_count(black_box(&x), black_box(&sign), black_box(&mask)))
     });
     c.bench_function("entity/match_count reference", |b| {
@@ -30,13 +39,13 @@ fn kernels(c: &mut Criterion) {
         })
     });
     for axis in Axis::ALL {
-        c.bench_function(&format!("entity/rotate {axis:?}"), |b| {
-            b.iter(|| black_box(&x).rotate(axis, 3))
+        c.bench_function(&format!("entity/rotate axis {}", axis.0), |b| {
+            b.iter(|| black_box(&x).rotate(axis, 1))
         });
     }
 
     let state = State::from_token(&Token::full(x), 1);
-    c.bench_function("state/add_votes (4096 positions)", |b| {
+    c.bench_function("state/add_votes (one entity)", |b| {
         b.iter_batched_ref(
             || state.clone(),
             |s| s.add_votes(black_box(&sign), black_box(&mask)),
@@ -46,7 +55,7 @@ fn kernels(c: &mut Criterion) {
     c.bench_function("state/token (read sign bits)", |b| {
         b.iter(|| black_box(&state).token())
     });
-    c.bench_function("counters/accumulate (4096 counters)", |b| {
+    c.bench_function("counters/accumulate (one entity)", |b| {
         let mut counters = vec![0i16; BITS];
         b.iter(|| accumulate(&mut counters, black_box(&sign), black_box(&mask), 512))
     });
@@ -67,8 +76,8 @@ fn kernels(c: &mut Criterion) {
 
 fn blocks(c: &mut Criterion) {
     let mut rng = Rng::new(3);
-    let key = Entity::from_fn(|p| p < 2048);
-    let value = Entity::domain_mask(4);
+    let key = key_mask();
+    let value = value_mask();
 
     // Memory block: 4096 units, all committed.
     let mut block = MemoryBlock::new(4096, MemoryParams::default());

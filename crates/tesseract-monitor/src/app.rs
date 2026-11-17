@@ -8,6 +8,7 @@ use std::sync::mpsc::{Receiver, channel};
 use eframe::egui::{
     self, Align2, Color32, FontId, Rect, RichText, Sense, Stroke, StrokeKind, Ui, pos2, vec2,
 };
+use tesseract_core::{Axis, BITS, DOMAINS, LEVELS, SIDE, WORDS, WORDS_PER_DOMAIN};
 use tesseract_run::snapshot::{BlockSnapshot, UnitDetail, UnitSnapshot};
 use tesseract_run::{Config, Metrics, create_run_dir, list_runs, run_in};
 
@@ -922,43 +923,56 @@ fn unit_detail(ui: &mut Ui, theme: &Theme, kind: &str, index: usize, unit: &Unit
         swatch(ui, theme.neutral, "none", theme);
     });
     ui.label(
-        RichText::new("Each map is one entity: 8 domains (rows d0–d7) of 8 values (columns v0–v7) of 8 × 8 bits.")
-            .small()
-            .color(theme.text_secondary),
+        RichText::new(format!(
+            "Each map is one entity: side {SIDE}, {LEVELS} axes, {BITS} bits. One row per 64-bit word, {WORDS_PER_DOMAIN} rows per domain."
+        ))
+        .small()
+        .color(theme.text_secondary),
     );
 }
 
-/// A map of the 4096 positions of an entity. Position `p` is drawn at
-/// column `value * 8 + bit`, row `domain * 8 + byte`, so each domain is a
-/// band of 8 rows and each value a square of 8 by 8.
+/// Columns of a connection map: one 64-bit word per row.
+const MAP_COLUMNS: usize = 64;
+
+/// A map of the positions of an entity: one row per 64-bit word, 64 bits
+/// across, with a separator at every domain boundary. The layout follows
+/// the geometry the engine was built with, so it holds for any `SIDE` and
+/// `LEVELS`.
 fn connection_map(ui: &mut Ui, theme: &Theme, id: &str, cell_at: impl Fn(usize) -> (Cell, String)) {
-    const PX: f32 = 4.0;
-    const SIDE: f32 = 64.0 * PX;
+    // Square cells, small enough that a tall entity still fits the panel.
+    let px = (256.0 / WORDS as f32).clamp(1.0, 4.0);
+    let size = vec2(MAP_COLUMNS as f32 * px, WORDS as f32 * px);
     let margin = vec2(22.0, 14.0);
-    let (response, painter) =
-        ui.allocate_painter(vec2(SIDE, SIDE) + margin + vec2(4.0, 4.0), Sense::hover());
+    let (response, painter) = ui.allocate_painter(size + margin + vec2(4.0, 4.0), Sense::hover());
     let origin = response.rect.min + margin;
-    let area = Rect::from_min_size(origin, vec2(SIDE, SIDE));
+    let area = Rect::from_min_size(origin, size);
     painter.rect_filled(area, 0.0, theme.neutral);
     let small = FontId::proportional(10.0);
-    for i in 0..8 {
-        let at = i as f32 * 8.0 * PX + 4.0 * PX;
+    let band = WORDS_PER_DOMAIN as f32 * px;
+    for d in 0..DOMAINS {
         painter.text(
-            pos2(origin.x - 4.0, origin.y + at),
+            pos2(origin.x - 4.0, origin.y + d as f32 * band + band / 2.0),
             Align2::RIGHT_CENTER,
-            format!("d{i}"),
-            small.clone(),
-            theme.text_secondary,
-        );
-        painter.text(
-            pos2(origin.x + at, origin.y - 2.0),
-            Align2::CENTER_BOTTOM,
-            format!("v{i}"),
+            format!("d{d}"),
             small.clone(),
             theme.text_secondary,
         );
     }
-    for p in 0..4096usize {
+    painter.text(
+        pos2(origin.x, origin.y - 2.0),
+        Align2::LEFT_BOTTOM,
+        "bit 0",
+        small.clone(),
+        theme.text_secondary,
+    );
+    painter.text(
+        pos2(area.right(), origin.y - 2.0),
+        Align2::RIGHT_BOTTOM,
+        "63",
+        small.clone(),
+        theme.text_secondary,
+    );
+    for p in 0..BITS {
         let (cell, _) = cell_at(p);
         let color = match cell {
             Cell::Empty => continue,
@@ -968,37 +982,35 @@ fn connection_map(ui: &mut Ui, theme: &Theme, id: &str, cell_at: impl Fn(usize) 
         };
         let (x, y) = position_to_cell(p);
         painter.rect_filled(
-            Rect::from_min_size(origin + vec2(x as f32 * PX, y as f32 * PX), vec2(PX, PX)),
+            Rect::from_min_size(origin + vec2(x as f32 * px, y as f32 * px), vec2(px, px)),
             0.0,
             color,
         );
     }
-    // Separators between domains and between values.
-    for i in 1..8 {
-        let at = i as f32 * 8.0 * PX;
+    // Separators between domains.
+    for d in 1..DOMAINS {
         painter.hline(
             area.x_range(),
-            origin.y + at,
-            Stroke::new(1.0, theme.surface),
-        );
-        painter.vline(
-            origin.x + at,
-            area.y_range(),
+            origin.y + d as f32 * band,
             Stroke::new(1.0, theme.surface),
         );
     }
     let _ = id;
     if let Some(pointer) = response.hover_pos().filter(|p| area.contains(*p)) {
         let rel = pointer - origin;
-        let (x, y) = ((rel.x / PX) as usize, (rel.y / PX) as usize);
-        if let Some(p) = cell_to_position(x.min(63), y.min(63)) {
+        let (x, y) = ((rel.x / px) as usize, (rel.y / px) as usize);
+        if let Some(p) = cell_to_position(x.min(MAP_COLUMNS - 1), y.min(WORDS - 1)) {
             let (_, note) = cell_at(p);
+            let digits: Vec<String> = Axis::ALL
+                .iter()
+                .rev()
+                .map(|a| format!("{}", a.digit(p)))
+                .collect();
             response.on_hover_text_at_pointer(format!(
-                "domain {} · value {} · byte {} · bit {} (position {p})\n{note}",
-                p >> 9,
-                (p >> 6) & 7,
-                (p >> 3) & 7,
-                p & 7
+                "position {p} · word {} bit {} · coordinates {}\n{note}",
+                p / 64,
+                p % 64,
+                digits.join(".")
             ));
         }
     }
@@ -1006,32 +1018,33 @@ fn connection_map(ui: &mut Ui, theme: &Theme, id: &str, cell_at: impl Fn(usize) 
 
 /// Column and row of a bit position in a connection map.
 fn position_to_cell(p: usize) -> (usize, usize) {
-    let (domain, value, byte, bit) = (p >> 9, (p >> 6) & 7, (p >> 3) & 7, p & 7);
-    (value * 8 + bit, domain * 8 + byte)
+    (p % MAP_COLUMNS, p / MAP_COLUMNS)
 }
 
 /// The bit position drawn at a column and row, if inside the map.
 fn cell_to_position(x: usize, y: usize) -> Option<usize> {
-    (x < 64 && y < 64).then_some(((y / 8) << 9) | ((x / 8) << 6) | ((y % 8) << 3) | (x % 8))
+    (x < MAP_COLUMNS && y < WORDS).then_some(y * MAP_COLUMNS + x)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tesseract_core::DOMAIN_BITS;
 
     #[test]
     fn map_layout_is_a_bijection() {
-        let mut seen = vec![false; 4096];
-        for p in 0..4096 {
+        let mut seen = vec![false; BITS];
+        for p in 0..BITS {
             let (x, y) = position_to_cell(p);
-            assert!(x < 64 && y < 64);
+            assert!(x < MAP_COLUMNS && y < WORDS);
             assert_eq!(cell_to_position(x, y), Some(p));
-            assert!(!seen[y * 64 + x]);
-            seen[y * 64 + x] = true;
+            assert!(!seen[y * MAP_COLUMNS + x]);
+            seen[y * MAP_COLUMNS + x] = true;
         }
-        assert_eq!(cell_to_position(64, 0), None);
-        // A domain is a band of 8 rows; a value is a square of 8 by 8.
-        assert_eq!(position_to_cell(512), (0, 8));
-        assert_eq!(position_to_cell(64), (8, 0));
+        assert_eq!(cell_to_position(MAP_COLUMNS, 0), None);
+        assert_eq!(cell_to_position(0, WORDS), None);
+        // Each row is one word; each domain is a band of rows.
+        assert_eq!(position_to_cell(64), (0, 1));
+        assert_eq!(position_to_cell(DOMAIN_BITS), (0, WORDS_PER_DOMAIN));
     }
 }

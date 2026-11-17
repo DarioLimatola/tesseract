@@ -4,7 +4,13 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
-use tesseract_core::{Entity, WORDS};
+use tesseract_core::{BITS, DOMAIN_BITS, Entity, LEVELS, SIDE, WORDS};
+
+/// The pass thresholds of the test plan are written for the default
+/// geometry. At any other geometry these tests only check that the
+/// machinery runs and that its structural claims hold; the numbers across
+/// geometries are collected by `scripts/sweep_geometry.py`.
+const DEFAULT_GEOMETRY: bool = SIDE == 8 && LEVELS == 4;
 use tesseract_run::snapshot::UnitDetail;
 use tesseract_run::{
     Config, Metrics, RunOutcome, Snapshot, list_snapshots, read_metrics, read_run_info, run,
@@ -48,9 +54,11 @@ fn test1_majority_unit_finds_the_hidden_subset() {
     let tmp = tempfile::tempdir().unwrap();
     let cfg = config("test1_majority.toml", &["task.held_out=4000"]);
     let (outcome, _) = run_in(&cfg, tmp.path());
-    assert!(outcome.passed, "held-out {}", outcome.last.held_out);
-    assert!(outcome.last.held_out >= 0.99);
     assert!(outcome.last.baselines["chance"] < 0.6);
+    if DEFAULT_GEOMETRY {
+        assert!(outcome.passed, "held-out {}", outcome.last.held_out);
+        assert!(outcome.last.held_out >= 0.99);
+    }
 
     // The mask is exactly the hidden subset and the signs are the hidden signs.
     let task = Majority::new(MajoritySettings {
@@ -72,11 +80,19 @@ fn test2_recall_memory_block_matches_nearest_neighbour() {
     let tmp = tempfile::tempdir().unwrap();
     let cfg = config("test2_recall.toml", &[]);
     let (outcome, _) = run_in(&cfg, tmp.path());
+    // Structural, at any geometry: the block has room, so nothing is
+    // dropped, and every unit it holds was recruited by a pair.
+    assert_eq!(outcome.last.dropped, 0);
+    assert_eq!(outcome.last.units_active, outcome.last.recruited);
+    // A pair recruits unless its key already fires a stored unit. Narrow
+    // keys collide, so only wide ones give one unit per pair.
+    assert!(outcome.last.recruited <= 1000);
+    if !DEFAULT_GEOMETRY {
+        return;
+    }
+    assert_eq!(outcome.last.recruited, 1000);
     assert!(outcome.passed, "held-out {}", outcome.last.held_out);
     assert_eq!(outcome.last.baselines["nearest_neighbour"], 1.0);
-    assert_eq!(outcome.last.recruited, 1000);
-    assert_eq!(outcome.last.dropped, 0);
-    assert_eq!(outcome.last.units_active, 1000);
     // The curve: exact up to 30% noise, and a cliff past the vigilance
     // threshold (0.625 means at most 37.5% of key bits may differ).
     for level in ["noise_000", "noise_100", "noise_200", "noise_300"] {
@@ -100,22 +116,43 @@ fn test2_capacity_is_the_number_of_units() {
     );
     let (outcome, _) = run_in(&cfg, tmp.path());
     assert!(!outcome.passed);
-    assert_eq!(outcome.last.dropped, 100);
-    assert!((outcome.last.held_out - 200.0 / 300.0).abs() < 1e-9);
+    // No free unit is left over.
+    assert_eq!(outcome.last.units_free, 0);
+    // So at best two thirds are recalled. Narrow keys collide, which can
+    // only lower it further; see the geometry sweep.
+    let best = 200.0 / 300.0;
+    assert!(
+        outcome.last.held_out <= best + 1e-9,
+        "held-out {} above the capacity bound {best}",
+        outcome.last.held_out
+    );
+    if DEFAULT_GEOMETRY {
+        assert_eq!(outcome.last.dropped, 100);
+        assert!((outcome.last.held_out - best).abs() < 1e-9);
+    }
 }
 
 #[test]
 fn test3_lookup_head_learns_what_to_select() {
     let tmp = tempfile::tempdir().unwrap();
-    let cfg = config("test3_lookup.toml", &["task.held_out=1000"]);
+    // The head starts matching on every bit, so the evidence it must
+    // gather grows with the entity.
+    let steps = 5000 * (BITS / 4096).max(1);
+    let cfg = config(
+        "test3_lookup.toml",
+        &["task.held_out=1000", &format!("budget.steps={steps}")],
+    );
     let (outcome, seen) = run_in(&cfg, tmp.path());
-    assert!(outcome.passed, "held-out {}", outcome.last.held_out);
-    assert!(outcome.last.held_out >= 0.95);
     // Untrained, the head writes nothing and scores zero.
     assert_eq!(seen[0].held_out, 0.0);
+    assert!(outcome.last.baselines["chance"] < 0.07);
+    if !DEFAULT_GEOMETRY {
+        return;
+    }
+    assert!(outcome.passed, "held-out {}", outcome.last.held_out);
+    assert!(outcome.last.held_out >= 0.95);
     // Matching on everything is far from the threshold.
     assert!(outcome.last.baselines["nearest_record"] < 0.6);
-    assert!(outcome.last.baselines["chance"] < 0.07);
 
     // What was learned: the key domain is fully matched, no decoy domain
     // is matched at all, and exactly the value domain is copied.
@@ -123,7 +160,7 @@ fn test3_lookup_head_learns_what_to_select() {
     let d = detail(&snap);
     let matched = entity(&d.input_mask);
     let copied = entity(&d.output_plus);
-    assert_eq!(matched.domain_count(2), 512, "key domain");
+    assert_eq!(matched.domain_count(2), DOMAIN_BITS as u32, "key domain");
     for decoy in [0, 1, 3] {
         assert_eq!(matched.domain_count(decoy), 0, "decoy domain {decoy}");
     }
@@ -207,7 +244,7 @@ fn run_folder_is_complete_and_readable() {
     assert_eq!(steps, vec![0, 1000, 2000, 3000]);
     let snap = last_snapshot(&dir);
     assert_eq!(snap.step, 3000);
-    assert_eq!(detail(&snap).counters.as_ref().unwrap().len(), 4096);
+    assert_eq!(detail(&snap).counters.as_ref().unwrap().len(), BITS);
 }
 
 #[test]

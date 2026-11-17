@@ -355,13 +355,15 @@ impl Model for AttentionModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entity::DOMAINS;
     use crate::rng::Rng;
 
     #[test]
     fn nearest_candidate_needs_known_positions() {
         let mut rng = Rng::new(51);
         let candidates: Vec<Entity> = (0..4).map(|_| rng.entity()).collect();
-        let mask = Entity::domain_mask(2);
+        // Two different domains, whatever the geometry.
+        let mask = Entity::domain_mask(DOMAINS - 1);
         let unknown = Token::partial(candidates[1], Entity::domain_mask(0));
         assert_eq!(nearest_candidate(&unknown, &candidates, &mask), None);
         let known = Token::full(candidates[2]);

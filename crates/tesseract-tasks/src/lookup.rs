@@ -10,6 +10,10 @@
 //! on everything is pulled towards the wrong records; it has to learn which
 //! domain is the key and which domain to copy.
 //!
+//! The task needs at least three domains: one for the key, one for the
+//! value, and at least one more to mislead or to carry noise. With two it
+//! degenerates, because the query then names its record outright.
+//!
 //! Shows: one attention head with binary keys can learn what to select.
 //! Baselines: chance, "the value of the last record", and "the value of
 //! the record closest to the query over all domains" (what an untrained
@@ -303,12 +307,16 @@ mod tests {
             "last value: {}",
             b[1].score
         );
-        // Matching on everything is misled by the decoys.
-        assert!(
-            b[2].score > 0.1 && b[2].score < 0.6,
-            "nearest record: {}",
-            b[2].score
-        );
+        // Matching on everything is misled by the decoys. With fewer
+        // than three domains there is no room for a decoy or for noise,
+        // so the query already names its record and the task degenerates.
+        if DOMAINS >= 3 {
+            assert!(
+                b[2].score > 0.1 && b[2].score < 0.6,
+                "nearest record: {}",
+                b[2].score
+            );
+        }
     }
 
     #[test]
@@ -324,7 +332,10 @@ mod tests {
             seed: 0,
         });
         let s = task.settings();
-        assert_eq!((s.records, s.values, s.keys, s.decoys), (2, 256, 2, 6));
+        assert_eq!(
+            (s.records, s.values, s.keys, s.decoys),
+            (2, 256, 2, DOMAINS - 2)
+        );
         assert_ne!(s.key_domain, s.value_domain);
     }
 }

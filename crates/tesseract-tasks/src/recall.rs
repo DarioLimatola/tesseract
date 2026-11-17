@@ -7,7 +7,7 @@
 //! Shows: capacity of the memory block, as a curve against N and noise.
 //! Reference: exact nearest-neighbour search over the stored keys.
 
-use tesseract_core::{Entity, Rng, Token};
+use tesseract_core::{DOMAINS, Entity, Rng, Token};
 
 use crate::{Baseline, Example, Task};
 
@@ -46,17 +46,14 @@ pub struct Recall {
     nearest_neighbour: f64,
 }
 
-/// Positions of a key: domains 0 to 3.
+/// Positions of a key: the first half of the domains.
 pub fn key_mask() -> Entity {
-    Entity::domain_mask(0)
-        | Entity::domain_mask(1)
-        | Entity::domain_mask(2)
-        | Entity::domain_mask(3)
+    (0..DOMAINS / 2).fold(Entity::ZERO, |m, d| m | Entity::domain_mask(d))
 }
 
-/// Positions of a value: domain 4.
+/// Positions of a value: the last domain.
 pub fn value_mask() -> Entity {
-    Entity::domain_mask(4)
+    Entity::domain_mask(DOMAINS - 1)
 }
 
 impl Recall {
@@ -190,14 +187,23 @@ mod tests {
         assert_eq!(task.held_out().len(), 50);
         for (i, e) in task.held_out().iter().enumerate() {
             let d = e.context[0].bits.distance(&task.keys[i]);
-            assert!((300..520).contains(&d), "about 20% of 2048 bits: {d}");
+            let bits = key_mask().count_ones();
+            let expected = bits / 5;
+            assert!(
+                d.abs_diff(expected) < expected / 2 + 8,
+                "about 20% of {bits} key bits: {d}"
+            );
             assert!((e.context[0].known & value_mask()).is_zero());
         }
         assert_eq!(task.baselines()[0].score, 1.0);
         assert_eq!(task.extra_sets().len(), 2);
         assert_eq!(task.extra_sets()[0].0, "noise_000");
-        // At 48% noise even exact search starts to fail.
-        assert!(task.nearest_neighbour_score(&task.extra_sets()[1].1) < 1.0);
+        // Exact search never does better on a noisier set. How far 48%
+        // noise pushes it depends on how many bits a key has, so only the
+        // ordering is asserted here.
+        let clean = task.nearest_neighbour_score(&task.extra_sets()[0].1);
+        let noisy = task.nearest_neighbour_score(&task.extra_sets()[1].1);
+        assert!(noisy <= clean, "{noisy} > {clean}");
     }
 
     #[test]
