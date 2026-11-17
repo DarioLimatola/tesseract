@@ -69,7 +69,9 @@ cargo run -p tesseract-core --example geometry     # the current shape
 python3 scripts/sweep_geometry.py                  # rebuild and measure at several shapes
 ```
 
-Run fmt, clippy and test before every commit. `.cargo/config.toml` builds for the processor of the build machine (`target-cpu=native`); remove that file for a portable build.
+Run fmt, clippy and test before every commit.
+
+`.cargo/config.toml` builds for the processor of the build machine (`target-cpu=native`): worth 5.7x on the counting kernel, but **local only**. It also applies to build scripts and proc macros, which run on the build machine, so a cache moved between machines makes the compiler die with SIGILL — that is why the CI sets `RUSTFLAGS: ""`. Remove the file, or set `RUSTFLAGS`, for a portable build.
 
 ## Engineering rules
 
