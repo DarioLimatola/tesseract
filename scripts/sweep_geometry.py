@@ -90,22 +90,25 @@ def read_geometry():
     return side, levels
 
 
-def measure(side, levels, quick):
+def measure(side, levels, quick, skip_tests=False, skip_tasks=False):
     row = {"side": side, "levels": levels, "bits": side**levels}
     set_geometry(side, levels)
 
-    tests = run(["cargo", "test", "--workspace", "--quiet"])
-    row["tests"] = "pass" if tests.returncode == 0 else "FAIL"
-    if tests.returncode != 0:
-        row["note"] = (tests.stdout + tests.stderr).strip().splitlines()[-1][:120]
-        return row
+    if skip_tests:
+        row["tests"] = "skipped"
+    else:
+        tests = run(["cargo", "test", "--workspace", "--quiet"])
+        row["tests"] = "pass" if tests.returncode == 0 else "FAIL"
+        if tests.returncode != 0:
+            row["note"] = (tests.stdout + tests.stderr).strip().splitlines()[-1][:120]
+            return row
 
     build = run(["cargo", "build", "--release", "--quiet"])
     if build.returncode != 0:
         row["tests"] = "FAIL (release build)"
         return row
 
-    for config, overrides in TASKS:
+    for config, overrides in [] if skip_tasks else TASKS:
         name = config.split("_")[0]
         out = run(
             ["./target/release/tesseract", "run", f"configs/{config}", "--out", "/tmp/sweep"]
@@ -117,7 +120,9 @@ def measure(side, levels, quick):
             curve = dict(re.findall(r"noise_(\d+): +([\d.]+)%", out.stdout))
             row["test2_noise30"] = float(curve.get("300", "nan"))
 
-    bench_cmd = ["cargo", "bench", "-p", "tesseract-core", "--"]
+    # Only the criterion target: the lib target uses another harness
+    # and rejects these options.
+    bench_cmd = ["cargo", "bench", "-p", "tesseract-core", "--bench", "kernels", "--"]
     if quick:
         bench_cmd += ["--warm-up-time", "0.3", "--measurement-time", "0.6", "--sample-size", "10"]
     else:
@@ -132,7 +137,7 @@ def measure(side, levels, quick):
         )
         if m:
             value, unit = float(m.group(1)), m.group(2)
-            ns = {"ns": 1.0, "µs": 1e3, "us": 1e3, "ms": 1e6, "s": 1e9}[unit]
+            ns = {"ps": 1e-3, "ns": 1.0, "µs": 1e3, "us": 1e3, "ms": 1e6, "s": 1e9}[unit]
             row[key] = value * ns
     return row
 
@@ -143,13 +148,15 @@ def fmt(v, digits=1):
     if isinstance(v, float):
         if v != v:
             return "-"
-        return f"{v:.{digits}f}"
+        return f"{v:.{digits}f}" if v >= 1 else f"{v:.2f}"
     return str(v)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--quick", action="store_true", help="shorter benchmark runs")
+    parser.add_argument("--skip-tests", action="store_true", help="do not run the test suite")
+    parser.add_argument("--skip-tasks", action="store_true", help="do not run tests 1 to 3")
     args = parser.parse_args()
 
     original = read_geometry()
@@ -158,7 +165,7 @@ def main():
         for side, levels in GEOMETRIES:
             started = time.time()
             print(f"… side {side}, {levels} levels", flush=True)
-            row = measure(side, levels, args.quick)
+            row = measure(side, levels, args.quick, args.skip_tests, args.skip_tasks)
             row["seconds"] = round(time.time() - started)
             rows.append(row)
             print("  " + json.dumps(row), flush=True)

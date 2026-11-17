@@ -3,25 +3,46 @@
     "side": 2,
     "levels": 7,
     "bits": 128,
-    "tests": "FAIL",
-    "note": "error: test failed, to rerun pass `-p tesseract-codecs --lib`",
-    "seconds": 17
+    "tests": "pass",
+    "test1": 100.0,
+    "test2": 4.0,
+    "test2_noise30": 6.25,
+    "test3": 100.0,
+    "match_count": 0.8329,
+    "memory_forward": 4487.9,
+    "attention_scores": 350.23,
+    "rotate_inner": 7.9108,
+    "rotate_second": 7.7603
   },
   {
     "side": 4,
     "levels": 4,
     "bits": 256,
-    "tests": "FAIL",
-    "note": "error: test failed, to rerun pass `-p tesseract-codecs --lib`",
-    "seconds": 17
+    "tests": "pass",
+    "test1": 100.0,
+    "test2": 56.0,
+    "test2_noise30": 54.75,
+    "test3": 100.0,
+    "match_count": 1.0345,
+    "memory_forward": 9709.6,
+    "attention_scores": 598.8,
+    "rotate_inner": 5.8973,
+    "rotate_second": 4.7872
   },
   {
     "side": 8,
     "levels": 3,
     "bits": 512,
-    "tests": "FAIL",
-    "note": "error: test failed, to rerun pass `-p tesseract-codecs --lib`",
-    "seconds": 17
+    "tests": "pass",
+    "test1": 100.0,
+    "test2": 99.0,
+    "test2_noise30": 98.75,
+    "test3": 100.0,
+    "match_count": 1.3165,
+    "memory_forward": 11236.0,
+    "attention_scores": 1048.8999999999999,
+    "rotate_inner": 5.6373,
+    "rotate_second": 5.0668
   },
   {
     "side": 8,
@@ -32,22 +53,40 @@
     "test2": 100.0,
     "test2_noise30": 100.0,
     "test3": 100.0,
-    "seconds": 92
+    "match_count": 8.9427,
+    "memory_forward": 136570.0,
+    "attention_scores": 3060.6,
+    "rotate_inner": 19.785,
+    "rotate_second": 17.06
   },
   {
     "side": 16,
     "levels": 3,
     "bits": 4096,
-    "tests": "FAIL",
-    "note": "error: test failed, to rerun pass `-p tesseract-core --lib`",
-    "seconds": 11
+    "tests": "pass",
+    "test1": 100.0,
+    "test2": 100.0,
+    "test2_noise30": 100.0,
+    "test3": 100.0,
+    "match_count": 9.2543,
+    "memory_forward": 164660.0,
+    "attention_scores": 2975.0,
+    "rotate_inner": 19.205,
+    "rotate_second": 2941.0
   },
   {
     "side": 8,
     "levels": 5,
     "bits": 32768,
-    "tests": "FAIL",
-    "note": "error: test failed, to rerun pass `-p tesseract-core --lib`",
-    "seconds": 17
+    "tests": "pass",
+    "test1": 100.0,
+    "test2": 100.0,
+    "test2_noise30": 100.0,
+    "test3": 28.7,
+    "match_count": 80.683,
+    "memory_forward": 1151100.0,
+    "attention_scores": 51296.0,
+    "rotate_inner": 102.89,
+    "rotate_second": 101.78
   }
 ]

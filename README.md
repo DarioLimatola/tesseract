@@ -139,6 +139,59 @@ The repository builds for the processor of the machine it is built on
 at start-up is planned. The memory block is limited by memory access, not
 by counting: 4096 units are 4 MB of signs and masks per token.
 
+## Geometry
+
+The shape of the engine is set by two constants at the top of
+`crates/tesseract-core/src/entity.rs`:
+
+```rust
+pub const SIDE: usize = 8;    // how many of each level fit in the one above
+pub const LEVELS: usize = 4;  // axes inside one entity: 8^4 = 4096 bits
+```
+
+Change them and rebuild; every type, test and benchmark follows.
+`cargo run -p tesseract-core --example geometry` prints the current shape,
+and `python3 scripts/sweep_geometry.py` rebuilds at several shapes and
+measures them. `SIDE` must be a power of two, and an entity and a domain
+must each hold at least one 64-bit word.
+
+Measured with that script, one core (`sweep_geometry.json`). Tests 1 to 3
+were run with 33 relevant inputs, 400 stored pairs in 512 units, and
+5,000 lookup sequences:
+
+| n | axes | entity | test 1 | test 2 | test 3 | match | memory block | attention | rotate inner | rotate 2nd axis |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2 | 7 | 128 b | 100% | 4% | 100% | 0.8 ns | 4.5 µs | 0.35 µs | 7.9 ns | 7.8 ns |
+| 4 | 4 | 256 b | 100% | 56% | 100% | 1.0 ns | 9.7 µs | 0.6 µs | 5.9 ns | 4.8 ns |
+| 8 | 3 | 512 b | 100% | 99% | 100% | 1.3 ns | 11.2 µs | 1.0 µs | 5.6 ns | 5.1 ns |
+| **8** | **4** | **4096 b** | **100%** | **100%** | **100%** | **8.9 ns** | **137 µs** | **3.1 µs** | **19.8 ns** | **17.1 ns** |
+| 16 | 3 | 4096 b | 100% | 100% | 100% | 9.3 ns | 165 µs | 3.0 µs | 19.2 ns | 2941 ns |
+| 8 | 5 | 32768 b | 100% | 100% | 29%¹ | 80.7 ns | 1151 µs | 51.3 µs | 102.9 ns | 101.8 ns |
+
+¹ 100% with 20,000 steps instead of 5,000: the head starts matching on
+every bit, so the evidence it must gather grows with the entity.
+
+What the numbers say:
+
+- **Counting costs scale with the bits**, as they should: eight times the
+  bits cost about nine times the time.
+- **Below about 512 bits an entity saves little and loses a lot.** From
+  128 to 512 bits is four times the capacity for 1.6 times the time,
+  because fixed overheads dominate the small shapes.
+- **Memory capacity is set by the width of the key, not by the number of
+  units.** Two random keys of `m` bits disagree on about `m / 2` bits
+  with a spread of `sqrt(m) / 2`, so a unit that fires at `v` agreement
+  only stays distinct while `v >= 0.5 + 2.5 / sqrt(m)`. At the default
+  0.625 vigilance that needs `m >= 256`: measured 99% at 256-bit keys,
+  56% at 128 and 4% at 64.
+- **n = 16 buys nothing and costs the fast rotation.** At the same 4096
+  bits it matches as fast, but its middle axis has a digit that straddles
+  a 64-bit word, so rotation falls back to the reference path and is 173
+  times slower.
+- **n = 8 with 4 axes is the only shape here that is fast everywhere and
+  large enough to hold a memory.** The choice was an assertion in the
+  design notes until this sweep; now it is measured.
+
 ## Not in this draft
 
 Stacks of blocks and the backward signal between them; merge, unite,
