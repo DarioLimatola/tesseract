@@ -6,6 +6,12 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Overrides `build.rustflags` in .cargo/config.toml, which asks for
+  # `target-cpu=native`. That is right on one machine and wrong here: the
+  # runners change processor between runs, and the restored cache then
+  # holds build scripts and proc macros compiled for instructions this
+  # machine does not have, so the compiler itself dies with SIGILL.
+  RUSTFLAGS: ""
 
 jobs:
   checks:

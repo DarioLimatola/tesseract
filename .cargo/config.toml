@@ -5,9 +5,14 @@
 # 270 us with the portable baseline, 121 us at AVX2 level, 114 us with
 # AVX-512. See README, "Speed".
 #
-# This is an interim choice: a binary built here may not run on an older
-# processor. The plan is to choose the fast path at start-up instead
-# (engineering guidelines, performance item 4). Remove this file to get a
-# portable build.
+# This is an interim choice, and it is local only. A binary built here may
+# not run on an older processor, and neither may the build scripts and proc
+# macros, which run on the build machine: on 2026-11-17 a CI runner with a
+# restored cache killed the compiler itself with SIGILL. The CI therefore
+# sets `RUSTFLAGS: ""` to override this file.
+#
+# The plan is to choose the fast path at start-up instead (engineering
+# guidelines, performance item 4). Remove this file, or set RUSTFLAGS, for
+# a portable build.
 [build]
 rustflags = ["-C", "target-cpu=native"]
