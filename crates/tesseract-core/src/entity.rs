@@ -1,63 +1,137 @@
-//! The entity: a four-dimensional hypercube of side 8, 8^4 = 4096 bits.
+//! The entity: a hypercube of side [`SIDE`] and [`LEVELS`] axes.
 //!
-//! | Level | Made of | Size |
-//! |---|---|---|
-//! | byte | 8 bits | 8 bits |
-//! | value (one dimension) | 8 bytes | 64 bits, one processor word |
-//! | domain (meta-dimension) | 8 values | 512 bits, one cache line |
-//! | entity | 8 domains | 4096 bits |
+//! **The geometry of the whole engine is set by the two constants below.**
+//! Change them, rebuild, and every type, test and benchmark follows. Nothing
+//! else in the workspace hard-codes a size.
 //!
-//! A bit position `p` in `0..4096` has four coordinates:
-//! `domain = p >> 9`, `value = (p >> 6) & 7`, `byte = (p >> 3) & 7`,
-//! `bit = p & 7`.
+//! With the default `SIDE = 8`, `LEVELS = 4` an entity is 8⁴ = 4096 bits:
+//!
+//! | Level | Made of | Size | Coincides with |
+//! |---|---|---|---|
+//! | byte (axis 0) | 8 bits | 8 bits | a byte |
+//! | value, one dimension (axis 1) | 8 bytes | 64 bits | a processor word |
+//! | domain, meta-dimension (axis 2) | 8 values | 512 bits | a cache line |
+//! | entity (axis 3) | 8 domains | 4096 bits | 512 bytes |
+//!
+//! A bit position `p` carries one digit per axis: digit `j` of `p` is
+//! `(p >> (LOG_SIDE * j)) & (SIDE - 1)`. Axis 0 is the innermost, axis
+//! `LEVELS - 1` the outermost (the domains).
+//!
+//! Constraints, checked at compile time: `SIDE` is a power of two and at
+//! least 2; `LEVELS` is at least 2; an entity holds at least one 64-bit
+//! word and a domain holds at least one word.
 //!
 //! Every operation has a slow, obvious reference implementation (suffix
-//! `_reference`) and the fast paths are tested against it.
+//! `_reference`) and the fast paths are property-tested against it at
+//! whatever geometry the crate is built with.
 
 use std::fmt;
 use std::ops::{BitAnd, BitOr, BitXor, Not};
 
-/// Side of the hypercube. The same side is used at every level.
-pub const SIDE: usize = 8;
-/// Number of domains in an entity.
-pub const DOMAINS: usize = SIDE;
-/// Number of values (64-bit words) in a domain.
-pub const VALUES_PER_DOMAIN: usize = SIDE;
-/// Number of 64-bit words in an entity.
-pub const WORDS: usize = DOMAINS * VALUES_PER_DOMAIN;
-/// Number of bits in an entity.
-pub const BITS: usize = WORDS * 64;
-/// Number of bits in a domain.
-pub const DOMAIN_BITS: usize = VALUES_PER_DOMAIN * 64;
+// ---------------------------------------------------------------------
+// The two numbers that set the geometry.
 
-/// One of the four axes of an entity.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Axis {
-    /// Bits inside a byte.
-    Bit,
-    /// Bytes inside a value.
-    Byte,
-    /// Values inside a domain.
-    Value,
-    /// Domains inside an entity.
-    Domain,
+/// Side of the hypercube: how many of each level fit in the level above.
+/// The same side is used at every level. Must be a power of two.
+///
+/// Fast rotations exist for 2, 4 and 8, where a digit never straddles the
+/// boundary of a 64-bit word. Larger sides work and are tested, but their
+/// middle axes rotate through the slow reference path.
+pub const SIDE: usize = 8;
+
+/// Number of axes inside one entity: the depth of the recursion below the
+/// entity. With `SIDE = 8`, `LEVELS = 4` gives the 8⁴-bit tesseract.
+pub const LEVELS: usize = 4;
+
+// ---------------------------------------------------------------------
+// Everything below is derived.
+
+/// Bits of a digit: `log2(SIDE)`.
+pub const LOG_SIDE: u32 = SIDE.trailing_zeros();
+/// Number of bits in an entity: `SIDE^LEVELS`.
+pub const BITS: usize = SIDE.pow(LEVELS as u32);
+/// Number of 64-bit words in an entity.
+pub const WORDS: usize = BITS / 64;
+/// Number of domains in an entity: the outermost axis.
+pub const DOMAINS: usize = SIDE;
+/// Number of bits in a domain.
+pub const DOMAIN_BITS: usize = BITS / SIDE;
+/// Number of 64-bit words in a domain.
+pub const WORDS_PER_DOMAIN: usize = DOMAIN_BITS / 64;
+/// Number of bits in one dimension (the group of axes 0 and 1). Equal to
+/// 64, one word, in the default geometry.
+pub const DIMENSION_BITS: usize = SIDE * SIDE;
+
+const _: () = assert!(SIDE.is_power_of_two(), "SIDE must be a power of two");
+const _: () = assert!(SIDE >= 2, "SIDE must be at least 2");
+const _: () = assert!(LEVELS >= 2, "LEVELS must be at least 2");
+const _: () = assert!(BITS >= 64, "an entity must hold at least one 64-bit word");
+const _: () = assert!(
+    DOMAIN_BITS >= 64,
+    "a domain must hold at least one 64-bit word"
+);
+
+/// One axis of an entity: `Axis(0)` is the innermost.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Axis(pub usize);
+
+const fn all_axes() -> [Axis; LEVELS] {
+    let mut out = [Axis(0); LEVELS];
+    let mut j = 0;
+    while j < LEVELS {
+        out[j] = Axis(j);
+        j += 1;
+    }
+    out
 }
 
 impl Axis {
-    /// All four axes, innermost first.
-    pub const ALL: [Axis; 4] = [Axis::Bit, Axis::Byte, Axis::Value, Axis::Domain];
+    /// Every axis, innermost first.
+    pub const ALL: [Axis; LEVELS] = all_axes();
+    /// The innermost axis: bits inside a byte, in the default geometry.
+    pub const INNERMOST: Axis = Axis(0);
+    /// The outermost axis: the domains.
+    pub const OUTERMOST: Axis = Axis(LEVELS - 1);
 
-    fn shift(self) -> usize {
-        match self {
-            Axis::Bit => 0,
-            Axis::Byte => 3,
-            Axis::Value => 6,
-            Axis::Domain => 9,
-        }
+    /// Position of this axis's digit, in bits.
+    #[inline]
+    pub const fn shift(self) -> u32 {
+        LOG_SIDE * self.0 as u32
+    }
+
+    /// Bit distance between two neighbouring values along this axis.
+    #[inline]
+    pub const fn stride(self) -> usize {
+        1usize << self.shift()
+    }
+
+    /// This axis's digit of a bit position.
+    #[inline]
+    pub const fn digit(self, p: usize) -> usize {
+        (p >> self.shift()) & (SIDE - 1)
     }
 }
 
-/// 4096 bits, stored as 64 words, aligned to a cache line.
+/// A mask of the bits of one 64-bit word whose digit along `axis` is less
+/// than `m`. Only meaningful when the digit lies inside a word.
+fn low_digits_mask(axis: Axis, m: usize) -> u64 {
+    let stride = axis.stride();
+    let period = stride * SIDE;
+    let ones = m * stride;
+    let mut mask: u64 = if ones >= 64 {
+        u64::MAX
+    } else {
+        (1u64 << ones) - 1
+    };
+    let mut p = period;
+    while p < 64 {
+        mask |= mask << p;
+        p *= 2;
+    }
+    mask
+}
+
+/// `BITS` bits, stored as `WORDS` words, aligned to a cache line.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C, align(64))]
 pub struct Entity(pub [u64; WORDS]);
@@ -95,14 +169,14 @@ impl Entity {
         e
     }
 
-    /// Reads the bit at position `p`. Positions wrap modulo 4096.
+    /// Reads the bit at position `p`. Positions wrap modulo [`BITS`].
     #[inline]
     pub fn get(&self, p: usize) -> bool {
         let p = p % BITS;
         (self.0[p >> 6] >> (p & 63)) & 1 == 1
     }
 
-    /// Writes the bit at position `p`. Positions wrap modulo 4096.
+    /// Writes the bit at position `p`. Positions wrap modulo [`BITS`].
     #[inline]
     pub fn set(&mut self, p: usize, bit: bool) {
         let p = p % BITS;
@@ -114,45 +188,46 @@ impl Entity {
         }
     }
 
-    /// The value (one dimension, 64 bits) at `value` in `domain`.
+    /// The word at index `word` of `domain`. In the default geometry a word
+    /// is exactly one dimension.
     #[inline]
-    pub fn value(&self, domain: usize, value: usize) -> u64 {
-        self.0[(domain % DOMAINS) * VALUES_PER_DOMAIN + (value % VALUES_PER_DOMAIN)]
+    pub fn word(&self, domain: usize, word: usize) -> u64 {
+        self.0[(domain % DOMAINS) * WORDS_PER_DOMAIN + (word % WORDS_PER_DOMAIN)]
     }
 
-    /// Sets the value (one dimension) at `value` in `domain`.
+    /// Sets the word at index `word` of `domain`.
     #[inline]
-    pub fn set_value(&mut self, domain: usize, value: usize, word: u64) {
-        self.0[(domain % DOMAINS) * VALUES_PER_DOMAIN + (value % VALUES_PER_DOMAIN)] = word;
+    pub fn set_word(&mut self, domain: usize, word: usize, value: u64) {
+        self.0[(domain % DOMAINS) * WORDS_PER_DOMAIN + (word % WORDS_PER_DOMAIN)] = value;
     }
 
-    /// The eight values of a domain.
+    /// The words of a domain.
     #[inline]
-    pub fn domain(&self, domain: usize) -> [u64; VALUES_PER_DOMAIN] {
-        let d = (domain % DOMAINS) * VALUES_PER_DOMAIN;
-        let mut out = [0u64; VALUES_PER_DOMAIN];
-        out.copy_from_slice(&self.0[d..d + VALUES_PER_DOMAIN]);
+    pub fn domain(&self, domain: usize) -> [u64; WORDS_PER_DOMAIN] {
+        let d = (domain % DOMAINS) * WORDS_PER_DOMAIN;
+        let mut out = [0u64; WORDS_PER_DOMAIN];
+        out.copy_from_slice(&self.0[d..d + WORDS_PER_DOMAIN]);
         out
     }
 
-    /// Replaces the eight values of a domain.
+    /// Replaces the words of a domain.
     #[inline]
-    pub fn set_domain(&mut self, domain: usize, values: [u64; VALUES_PER_DOMAIN]) {
-        let d = (domain % DOMAINS) * VALUES_PER_DOMAIN;
-        self.0[d..d + VALUES_PER_DOMAIN].copy_from_slice(&values);
+    pub fn set_domain(&mut self, domain: usize, words: [u64; WORDS_PER_DOMAIN]) {
+        let d = (domain % DOMAINS) * WORDS_PER_DOMAIN;
+        self.0[d..d + WORDS_PER_DOMAIN].copy_from_slice(&words);
     }
 
     /// A mask with every bit of one domain set.
     pub fn domain_mask(domain: usize) -> Self {
         let mut e = Self::ZERO;
-        e.set_domain(domain, [u64::MAX; VALUES_PER_DOMAIN]);
+        e.set_domain(domain, [u64::MAX; WORDS_PER_DOMAIN]);
         e
     }
 
-    /// A mask with every bit of one dimension set.
-    pub fn dimension_mask(domain: usize, value: usize) -> Self {
+    /// A mask with every bit of one word set.
+    pub fn word_mask(domain: usize, word: usize) -> Self {
         let mut e = Self::ZERO;
-        e.set_value(domain, value, u64::MAX);
+        e.set_word(domain, word, u64::MAX);
         e
     }
 
@@ -166,18 +241,14 @@ impl Entity {
     /// Number of bits set.
     #[inline]
     pub fn count_ones(&self) -> u32 {
-        let mut n = 0;
-        for w in 0..WORDS {
-            n += self.0[w].count_ones();
-        }
-        n
+        self.0.iter().map(|w| w.count_ones()).sum()
     }
 
     /// Number of bits set in one domain.
     #[inline]
     pub fn domain_count(&self, domain: usize) -> u32 {
-        let d = (domain % DOMAINS) * VALUES_PER_DOMAIN;
-        self.0[d..d + VALUES_PER_DOMAIN]
+        let d = (domain % DOMAINS) * WORDS_PER_DOMAIN;
+        self.0[d..d + WORDS_PER_DOMAIN]
             .iter()
             .map(|w| w.count_ones())
             .sum()
@@ -239,69 +310,74 @@ impl Entity {
     /// Number of agreeing bits inside one domain.
     #[inline]
     pub fn domain_agreement(&self, other: &Entity, domain: usize) -> u32 {
-        let d = (domain % DOMAINS) * VALUES_PER_DOMAIN;
+        let d = (domain % DOMAINS) * WORDS_PER_DOMAIN;
         let mut n = 0;
-        for w in d..d + VALUES_PER_DOMAIN {
+        for w in d..d + WORDS_PER_DOMAIN {
             n += (!(self.0[w] ^ other.0[w])).count_ones();
         }
         n
     }
 
     /// Rotates the entity by `k` steps along one axis: the content at
-    /// coordinate `c` on that axis moves to coordinate `(c + k) mod 8`.
+    /// coordinate `c` on that axis moves to coordinate `(c + k) mod SIDE`.
     ///
     /// A rotation is a permutation of bit positions; its inverse (and its
-    /// transpose for a backward pass) is the rotation by `8 - k`.
+    /// transpose for a backward pass) is the rotation by `SIDE - k`.
+    ///
+    /// Three cases. An axis whose digit lies entirely above bit 5 of the
+    /// position moves whole words. An axis whose digit lies entirely below
+    /// bit 6 is a permutation inside every word, done with two masked
+    /// shifts. An axis whose digit straddles that boundary — only possible
+    /// when `SIDE` is 16 or more — falls back to the reference path, which
+    /// is correct but moves one bit at a time.
     pub fn rotate(&self, axis: Axis, k: usize) -> Entity {
         let k = k % SIDE;
         if k == 0 {
             return *self;
         }
-        let mut out = Entity::ZERO;
-        match axis {
-            Axis::Bit => {
-                // Rotate every byte left by k.
-                let low = 0x0101_0101_0101_0101u64.wrapping_mul((1u64 << (SIDE - k)) - 1);
-                for w in 0..WORDS {
-                    let x = self.0[w];
-                    out.0[w] = ((x & low) << k) | ((x & !low) >> (SIDE - k));
+        let shift = axis.shift();
+        let stride = axis.stride();
+        if stride >= 64 {
+            // Whole-word moves.
+            let step = stride / 64;
+            let block = step * SIDE;
+            let mut out = Entity::ZERO;
+            let mut base = 0;
+            while base < WORDS {
+                for d in 0..SIDE {
+                    let src = base + d * step;
+                    let dst = base + ((d + k) % SIDE) * step;
+                    out.0[dst..dst + step].copy_from_slice(&self.0[src..src + step]);
                 }
+                base += block;
             }
-            Axis::Byte => {
-                for w in 0..WORDS {
-                    out.0[w] = self.0[w].rotate_left(8 * k as u32);
-                }
+            out
+        } else if shift + LOG_SIDE <= 6 {
+            // Permutation inside each word: the digits below `SIDE - k`
+            // move up, the rest wrap around to the bottom.
+            let lo = low_digits_mask(axis, SIDE - k);
+            let up = (k * stride) as u32;
+            let down = ((SIDE - k) * stride) as u32;
+            let mut out = Entity::ZERO;
+            for w in 0..WORDS {
+                let x = self.0[w];
+                out.0[w] = ((x & lo) << up) | ((x & !lo) >> down);
             }
-            Axis::Value => {
-                for d in 0..DOMAINS {
-                    for v in 0..VALUES_PER_DOMAIN {
-                        out.0[d * VALUES_PER_DOMAIN + (v + k) % VALUES_PER_DOMAIN] =
-                            self.0[d * VALUES_PER_DOMAIN + v];
-                    }
-                }
-            }
-            Axis::Domain => {
-                for d in 0..DOMAINS {
-                    for v in 0..VALUES_PER_DOMAIN {
-                        out.0[((d + k) % DOMAINS) * VALUES_PER_DOMAIN + v] =
-                            self.0[d * VALUES_PER_DOMAIN + v];
-                    }
-                }
-            }
+            out
+        } else {
+            self.rotate_reference(axis, k)
         }
-        out
     }
 
     /// Reference for [`Entity::rotate`]: moves one bit at a time.
     pub fn rotate_reference(&self, axis: Axis, k: usize) -> Entity {
         let shift = axis.shift();
+        let field = (SIDE - 1) << shift;
         let mut out = Entity::ZERO;
         for p in 0..BITS {
             if self.get(p) {
-                let c = (p >> shift) & 7;
-                let moved = (c + k) % SIDE;
-                let q = (p & !(7 << shift)) | (moved << shift);
-                out.set(q, true);
+                let moved = (axis.digit(p) + k) % SIDE;
+                out.set((p & !field) | (moved << shift), true);
             }
         }
         out
@@ -369,22 +445,37 @@ mod tests {
     use crate::rng::Rng;
 
     #[test]
-    fn sizes() {
-        assert_eq!(BITS, 4096);
-        assert_eq!(std::mem::size_of::<Entity>(), 512);
-        assert_eq!(std::mem::align_of::<Entity>(), 64);
+    fn geometry_is_consistent() {
+        assert_eq!(BITS, SIDE.pow(LEVELS as u32));
+        assert_eq!(WORDS * 64, BITS);
+        assert_eq!(DOMAINS * DOMAIN_BITS, BITS);
+        assert_eq!(WORDS_PER_DOMAIN * DOMAINS, WORDS);
+        // Padded up to the 64-byte alignment for small entities.
+        assert!(std::mem::size_of::<Entity>() >= WORDS * 8);
+        assert_eq!(std::mem::size_of::<Entity>() % 64, 0);
+        assert_eq!(1usize << LOG_SIDE, SIDE);
+        // Digits of a position cover it exactly.
+        for p in [0, 1, BITS / 3, BITS - 1] {
+            let rebuilt: usize = Axis::ALL.iter().map(|a| a.digit(p) << a.shift()).sum();
+            assert_eq!(rebuilt, p, "position {p}");
+        }
     }
 
     #[test]
     fn get_set_roundtrip() {
         let mut e = Entity::ZERO;
+        let last = BITS - 1;
+        let middle = DOMAIN_BITS + 1;
         e.set(0, true);
-        e.set(4095, true);
-        e.set(513, true);
-        assert!(e.get(0) && e.get(4095) && e.get(513));
+        e.set(last, true);
+        e.set(middle, true);
+        assert!(e.get(0) && e.get(last) && e.get(middle));
         assert_eq!(e.count_ones(), 3);
-        assert_eq!(e.domain_count(1), 1);
-        e.set(513, false);
+        // Every bit is counted by exactly one domain.
+        let by_domain: u32 = (0..DOMAINS).map(|d| e.domain_count(d)).sum();
+        assert_eq!(by_domain, 3);
+        assert!(e.domain_count(1) >= 1);
+        e.set(middle, false);
         assert_eq!(e.count_ones(), 2);
     }
 
@@ -394,10 +485,10 @@ mod tests {
         for _ in 0..20 {
             let e = rng.entity();
             for axis in Axis::ALL {
-                for k in 0..=8 {
+                for k in 0..=SIDE {
                     let fast = e.rotate(axis, k);
                     assert_eq!(fast, e.rotate_reference(axis, k), "{axis:?} {k}");
-                    assert_eq!(fast.rotate(axis, 8 - (k % 8)), e);
+                    assert_eq!(fast.rotate(axis, SIDE - (k % SIDE)), e);
                     assert_eq!(fast.count_ones(), e.count_ones());
                 }
             }
@@ -405,13 +496,36 @@ mod tests {
     }
 
     #[test]
+    fn rotation_moves_the_right_digit() {
+        for axis in Axis::ALL {
+            // A single bit at the origin moves one step along the axis only.
+            let moved = Entity::bit_mask(0).rotate(axis, 1);
+            assert_eq!(moved, Entity::bit_mask(axis.stride()), "{axis:?}");
+        }
+    }
+
+    #[test]
     fn masks_cover_the_entity() {
         let mut all = Entity::ZERO;
         for d in 0..DOMAINS {
-            assert_eq!(Entity::domain_mask(d).count_ones(), 512);
+            assert_eq!(Entity::domain_mask(d).count_ones(), DOMAIN_BITS as u32);
             all = all | Entity::domain_mask(d);
         }
         assert_eq!(all, Entity::ONES);
-        assert_eq!(Entity::dimension_mask(3, 2).count_ones(), 64);
+        assert_eq!(Entity::word_mask(DOMAINS - 1, 0).count_ones(), 64);
+    }
+
+    #[test]
+    fn low_digits_mask_counts_digits() {
+        for axis in Axis::ALL {
+            if axis.shift() + LOG_SIDE > 6 {
+                continue;
+            }
+            for m in 0..=SIDE {
+                let mask = low_digits_mask(axis, m);
+                let expected = (0..64).filter(|p| axis.digit(*p) < m).count() as u32;
+                assert_eq!(mask.count_ones(), expected, "{axis:?} m={m}");
+            }
+        }
     }
 }

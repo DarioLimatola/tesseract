@@ -5,8 +5,8 @@ use proptest::prelude::*;
 use tesseract_core::counters::{accumulate, accumulate_reference};
 use tesseract_core::unit::{match_count, match_count_reference};
 use tesseract_core::{
-    AttentionHead, AttentionParams, Axis, BITS, Entity, MemoryBlock, MemoryParams, Rng, State,
-    Token, Unit,
+    AttentionHead, AttentionParams, Axis, BITS, DOMAINS, Entity, LEVELS, MemoryBlock, MemoryParams,
+    Rng, SIDE, State, Token, Unit,
 };
 
 /// A random entity with a random density of ones, so that sparse and dense
@@ -23,38 +23,30 @@ fn entity() -> impl Strategy<Value = Entity> {
 }
 
 fn axis() -> impl Strategy<Value = Axis> {
-    prop_oneof![
-        Just(Axis::Bit),
-        Just(Axis::Byte),
-        Just(Axis::Value),
-        Just(Axis::Domain)
-    ]
+    (0usize..LEVELS).prop_map(Axis)
 }
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
     #[test]
-    fn rotation_equals_reference(e in entity(), a in axis(), k in 0usize..20) {
+    fn rotation_equals_reference(e in entity(), a in axis(), k in 0usize..(SIDE * 2 + 3)) {
         prop_assert_eq!(e.rotate(a, k), e.rotate_reference(a, k));
     }
 
     #[test]
-    fn rotation_is_a_permutation_with_inverse(e in entity(), a in axis(), k in 0usize..8) {
+    fn rotation_is_a_permutation_with_inverse(e in entity(), a in axis(), k in 0usize..SIDE) {
         let r = e.rotate(a, k);
         prop_assert_eq!(r.count_ones(), e.count_ones());
-        prop_assert_eq!(r.rotate(a, (8 - k) % 8), e);
+        prop_assert_eq!(r.rotate(a, (SIDE - k) % SIDE), e);
     }
 
     #[test]
-    fn rotations_along_different_axes_commute(e in entity(), k in 0usize..8, j in 0usize..8) {
+    fn rotations_along_different_axes_commute(e in entity(), a in axis(), b in axis(), k in 0usize..SIDE, j in 0usize..SIDE) {
+        prop_assume!(a != b);
         prop_assert_eq!(
-            e.rotate(Axis::Bit, k).rotate(Axis::Domain, j),
-            e.rotate(Axis::Domain, j).rotate(Axis::Bit, k)
-        );
-        prop_assert_eq!(
-            e.rotate(Axis::Byte, k).rotate(Axis::Value, j),
-            e.rotate(Axis::Value, j).rotate(Axis::Byte, k)
+            e.rotate(a, k).rotate(b, j),
+            e.rotate(b, j).rotate(a, k)
         );
     }
 
@@ -62,7 +54,7 @@ proptest! {
     fn agreement_equals_reference(a in entity(), b in entity(), m in entity()) {
         prop_assert_eq!(a.agreement(&b, &m), a.agreement_reference(&b, &m));
         prop_assert_eq!(a.agreement(&b, &Entity::ONES) + a.distance(&b), BITS as u32);
-        let by_domain: u32 = (0..8).map(|d| a.domain_agreement(&b, d)).sum();
+        let by_domain: u32 = (0..DOMAINS).map(|d| a.domain_agreement(&b, d)).sum();
         prop_assert_eq!(by_domain, a.agreement(&b, &Entity::ONES));
     }
 

@@ -334,7 +334,7 @@ mod tests {
         }
         // The same evidence makes it fire on the opposite input.
         assert!(u.output(&!x));
-        assert_eq!(u.live, 4096);
+        assert_eq!(u.live, BITS as u32);
     }
 
     #[test]

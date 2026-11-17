@@ -5,7 +5,7 @@
 //! - Unordered categories use a fixed random code per category.
 //! - Free bits are 64 independent binary features and need no code.
 
-use crate::entity::VALUES_PER_DOMAIN;
+use crate::entity::WORDS_PER_DOMAIN;
 use crate::rng::Rng;
 
 /// Highest thermometer level.
@@ -47,9 +47,9 @@ pub fn category(seed: u64, id: u64) -> u64 {
 }
 
 /// Fixed random 512-bit code of a category, filling a whole domain.
-pub fn category_domain(seed: u64, id: u64) -> [u64; VALUES_PER_DOMAIN] {
+pub fn category_domain(seed: u64, id: u64) -> [u64; WORDS_PER_DOMAIN] {
     let mut rng = Rng::new(seed).fork(id);
-    let mut out = [0u64; VALUES_PER_DOMAIN];
+    let mut out = [0u64; WORDS_PER_DOMAIN];
     for w in &mut out {
         *w = rng.next_u64();
     }
@@ -71,8 +71,8 @@ pub fn nearest(codes: &[u64], word: u64) -> Option<usize> {
 
 /// Index of the 512-bit code closest to `domain`, or `None` when empty.
 pub fn nearest_domain(
-    codes: &[[u64; VALUES_PER_DOMAIN]],
-    domain: &[u64; VALUES_PER_DOMAIN],
+    codes: &[[u64; WORDS_PER_DOMAIN]],
+    domain: &[u64; WORDS_PER_DOMAIN],
 ) -> Option<usize> {
     let mut best: Option<(u32, usize)> = None;
     for (i, c) in codes.iter().enumerate() {

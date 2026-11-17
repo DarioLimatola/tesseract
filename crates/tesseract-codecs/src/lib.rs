@@ -9,7 +9,7 @@
 //! audio come later.
 
 use tesseract_core::code::{category_domain, nearest_domain, thermometer, thermometer_level};
-use tesseract_core::{Entity, Token, VALUES_PER_DOMAIN};
+use tesseract_core::{Entity, Token, WORDS_PER_DOMAIN};
 
 /// A two-way adapter between an item and a part of an entity.
 pub trait Codec {
@@ -40,7 +40,7 @@ pub fn erase(token: &mut Token, footprint: &Entity) {
 #[derive(Clone, Debug)]
 pub struct ByteCodec {
     domain: usize,
-    codes: Vec<[u64; VALUES_PER_DOMAIN]>,
+    codes: Vec<[u64; WORDS_PER_DOMAIN]>,
 }
 
 impl ByteCodec {
@@ -85,23 +85,23 @@ impl Codec for ByteCodec {
     }
 }
 
-/// An integer in a range as a thermometer code in one dimension.
+/// An integer in a range as a thermometer code in one word.
 ///
 /// The range is divided into 64 equal steps (65 levels). Close numbers get
 /// close codes: the distance between two codes is the difference of their
-/// levels.
+/// levels. In the default geometry a word is exactly one dimension.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NumberCodec {
     domain: usize,
-    value: usize,
+    word: usize,
     min: i64,
     max: i64,
 }
 
 impl NumberCodec {
-    /// An adapter for one dimension. `max` must be greater than `min`;
-    /// otherwise the range is widened to one step.
-    pub fn new(domain: usize, value: usize, min: i64, max: i64) -> Self {
+    /// An adapter for one word of one domain. `max` must be greater than
+    /// `min`; otherwise the range is widened to one step.
+    pub fn new(domain: usize, word: usize, min: i64, max: i64) -> Self {
         let max = if max > min {
             max
         } else {
@@ -109,7 +109,7 @@ impl NumberCodec {
         };
         Self {
             domain,
-            value,
+            word,
             min,
             max,
         }
@@ -134,13 +134,13 @@ impl Codec for NumberCodec {
     type Item = i64;
 
     fn footprint(&self) -> Entity {
-        Entity::dimension_mask(self.domain, self.value)
+        Entity::word_mask(self.domain, self.word)
     }
 
     fn encode(&self, item: &i64, token: &mut Token) {
         token
             .bits
-            .set_value(self.domain, self.value, thermometer(self.level(*item)));
+            .set_word(self.domain, self.word, thermometer(self.level(*item)));
         token.known = token.known | self.footprint();
     }
 
@@ -148,7 +148,7 @@ impl Codec for NumberCodec {
         if (token.known & self.footprint()).is_zero() {
             return None;
         }
-        let level = thermometer_level(token.bits.value(self.domain, self.value));
+        let level = thermometer_level(token.bits.word(self.domain, self.word));
         Some(self.number(level))
     }
 }
@@ -158,18 +158,39 @@ mod tests {
     use super::*;
     use tesseract_core::Rng;
 
+    /// Noise a byte code can take, as a share of the domain in per mille.
+    ///
+    /// Two random codes of `m` bits differ in about `m / 2` bits, so a
+    /// code decodes correctly while the flipped bits stay well below
+    /// `m / 4`. Wide domains leave room for heavy noise; a domain of one
+    /// word carries 256 codes with little margin, so the share has to
+    /// shrink with it. This is a capacity limit of the code, not of the
+    /// engine: see the geometry sweep.
+    fn survivable_noise() -> u32 {
+        match tesseract_core::DOMAIN_BITS {
+            512.. => 300,
+            256..512 => 250,
+            128..256 => 150,
+            _ => 80,
+        }
+    }
+
     #[test]
     fn bytes_roundtrip_and_survive_noise() {
         let codec = ByteCodec::new(3, 7);
         let mut rng = Rng::new(1);
+        let noise = survivable_noise();
         for b in 0..=255u8 {
             let mut t = Token::default();
             codec.encode(&b, &mut t);
             assert_eq!(t.known, Entity::domain_mask(3));
             assert_eq!(codec.decode(&t), Some(b));
-            // 30% of the bits flipped.
-            let noisy = Token::partial(t.bits.with_noise(&mut rng, 300, &t.known), t.known);
-            assert_eq!(codec.decode(&noisy), Some(b));
+            let noisy = Token::partial(t.bits.with_noise(&mut rng, noise, &t.known), t.known);
+            assert_eq!(
+                codec.decode(&noisy),
+                Some(b),
+                "byte {b} at {noise} per mille"
+            );
         }
         assert_eq!(codec.decode(&Token::default()), None);
     }

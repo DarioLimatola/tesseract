@@ -278,7 +278,7 @@ mod tests {
         // Budget limits the number pruned.
         let mut mask = Entity::ONES;
         assert_eq!(prune(&counters, &mut mask, &prot, &A, 16, 0), 16);
-        assert_eq!(mask.count_ones(), 4096 - 16);
+        assert_eq!(mask.count_ones(), BITS as u32 - 16);
         // A minimum of live connections is kept.
         let mut mask = Entity::from_fn(|p| p < 10);
         assert_eq!(prune(&counters, &mut mask, &prot, &A, 100, 8), 2);

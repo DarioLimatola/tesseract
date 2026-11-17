@@ -76,9 +76,9 @@ impl State {
     pub fn from_token(token: &Token, weight: i8) -> Self {
         let w = weight.clamp(0, STATE_LIMIT);
         let mut s = Self::zero();
-        for p in 0..BITS {
+        for (p, value) in s.0.iter_mut().enumerate() {
             if token.known.get(p) {
-                s.0[p] = if token.bits.get(p) { w } else { -w };
+                *value = if token.bits.get(p) { w } else { -w };
             }
         }
         s
@@ -120,15 +120,15 @@ impl State {
 
     /// Reference for [`State::add_votes`]: one position at a time.
     pub fn add_votes_reference(&mut self, plus: &Entity, minus: &Entity) {
-        for p in 0..BITS {
-            let mut v = i32::from(self.0[p]);
+        for (p, value) in self.0.iter_mut().enumerate() {
+            let mut v = i32::from(*value);
             if plus.get(p) {
                 v += 1;
             }
             if minus.get(p) {
                 v -= 1;
             }
-            self.0[p] = v.clamp(-i32::from(STATE_LIMIT), i32::from(STATE_LIMIT)) as i8;
+            *value = v.clamp(-i32::from(STATE_LIMIT), i32::from(STATE_LIMIT)) as i8;
         }
     }
 

@@ -417,9 +417,7 @@ impl MemoryBlock {
         let mut report = StructureReport::default();
         if error_rising {
             report.skipped = true;
-            for r in &mut self.recent {
-                *r = 0;
-            }
+            self.recent.fill(0);
             return report;
         }
         let n = self.units();
@@ -516,14 +514,48 @@ impl MemoryBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entity::DOMAINS;
     use crate::rng::Rng;
 
+    /// The first half of the domains, as the recall task lays a key out.
     fn key_mask() -> Entity {
-        Entity::from_fn(|p| p < 2048)
+        (0..DOMAINS / 2).fold(Entity::ZERO, |m, d| m | Entity::domain_mask(d))
     }
 
+    /// The last domain, which never overlaps the key.
     fn value_mask() -> Entity {
-        Entity::domain_mask(4)
+        Entity::domain_mask(DOMAINS - 1)
+    }
+
+    /// Vigilance that keeps two unrelated keys from colliding.
+    ///
+    /// Two random keys of `m` bits disagree on about `m / 2` bits, with a
+    /// spread of `sqrt(m) / 2`. A unit fires when at least `v` of its live
+    /// inputs agree, so a wrong key fires it when the disagreement falls
+    /// below `(1 - v) * m`, which is `(v - 0.5) * 2 * sqrt(m)` spreads
+    /// away. Five spreads make collisions negligible, so
+    /// `v >= 0.5 + 2.5 / sqrt(m)`. Wide keys are safe at the default
+    /// 0.625; narrow ones need more.
+    fn vigilance() -> u32 {
+        let m = key_mask().count_ones() as f64;
+        625.max((500.0 + 2500.0 / m.sqrt()).ceil() as u32)
+    }
+
+    /// Pairs a block of this key width can hold without interference.
+    fn pairs_to_store() -> usize {
+        (key_mask().count_ones() as usize / 40).clamp(4, 50)
+    }
+
+    /// Noise the test applies, leaving half of the vigilance margin.
+    fn test_noise() -> u32 {
+        200.min((1000 - vigilance()) / 2)
+    }
+
+    fn params() -> MemoryParams {
+        MemoryParams {
+            vigilance_per_mille: vigilance(),
+            ..MemoryParams::default()
+        }
     }
 
     fn pair(rng: &mut Rng) -> (Token, Entity) {
@@ -552,8 +584,9 @@ mod tests {
     #[test]
     fn stores_and_recalls_with_noise() {
         let mut rng = Rng::new(32);
-        let mut block = MemoryBlock::new(64, MemoryParams::default());
-        let pairs: Vec<_> = (0..50).map(|_| pair(&mut rng)).collect();
+        let n = pairs_to_store();
+        let mut block = MemoryBlock::new(n + 14, params());
+        let pairs: Vec<_> = (0..n).map(|_| pair(&mut rng)).collect();
         for (key, value) in &pairs {
             let s = State::from_token(key, 1);
             let up = block.learn(key, &s, value, &value_mask());
@@ -564,8 +597,11 @@ mod tests {
             let out = recall(&block, key);
             assert_eq!(out.bits & value_mask(), *value);
             assert_eq!(out.known & value_mask(), value_mask());
-            // 20% of the key bits flipped.
-            let noisy = Token::partial(key.bits.with_noise(&mut rng, 200, &key_mask()), key_mask());
+            // Noisy key, within the vigilance margin.
+            let noisy = Token::partial(
+                key.bits.with_noise(&mut rng, test_noise(), &key_mask()),
+                key_mask(),
+            );
             assert_eq!(recall(&block, &noisy).bits & value_mask(), *value);
         }
         // An unrelated key recalls nothing.
@@ -576,13 +612,13 @@ mod tests {
         let up = block.learn(key, &State::from_token(key, 1), value, &value_mask());
         assert_eq!((up.recruited, up.fired), (0, 1));
         let c = block.census();
-        assert_eq!((c.units_active, c.units_free), (50, 14));
+        assert_eq!((c.units_active, c.units_free), (n as u64, 14));
     }
 
     #[test]
     fn full_block_drops_new_pairs() {
         let mut rng = Rng::new(33);
-        let mut block = MemoryBlock::new(4, MemoryParams::default());
+        let mut block = MemoryBlock::new(4, params());
         let mut dropped = 0;
         for _ in 0..6 {
             let (key, value) = pair(&mut rng);
@@ -595,10 +631,10 @@ mod tests {
     #[test]
     fn contradicted_unit_is_blamed_until_it_stops_firing() {
         let mut rng = Rng::new(34);
-        let mut params = MemoryParams::default();
-        params.address.automaton.live_at = 4;
-        params.address.bias_step = 2;
-        let mut block = MemoryBlock::new(8, params);
+        let mut p = params();
+        p.address.automaton.live_at = 4;
+        p.address.bias_step = 2;
+        let mut block = MemoryBlock::new(8, p);
         let (key, value) = pair(&mut rng);
         block.learn(&key, &State::from_token(&key, 1), &value, &value_mask());
         // The same key now asks for the opposite value.
@@ -618,7 +654,7 @@ mod tests {
     #[test]
     fn idle_units_go_dormant_and_are_revived_by_learning() {
         let mut rng = Rng::new(35);
-        let mut block = MemoryBlock::new(8, MemoryParams::default());
+        let mut block = MemoryBlock::new(8, params());
         let (k1, v1) = pair(&mut rng);
         let (k2, v2) = pair(&mut rng);
         block.learn(&k1, &State::from_token(&k1, 1), &v1, &value_mask());
@@ -651,8 +687,10 @@ mod tests {
     #[test]
     fn batch_equals_single() {
         let mut rng = Rng::new(36);
-        let mut block = MemoryBlock::new(32, MemoryParams::default());
-        let pairs: Vec<_> = (0..20).map(|_| pair(&mut rng)).collect();
+        let mut block = MemoryBlock::new(32, params());
+        let pairs: Vec<_> = (0..pairs_to_store().min(20))
+            .map(|_| pair(&mut rng))
+            .collect();
         for (key, value) in &pairs {
             block.learn(key, &State::from_token(key, 1), value, &value_mask());
         }

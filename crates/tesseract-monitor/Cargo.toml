@@ -17,6 +17,7 @@ name = "tesseract-monitor"
 path = "src/main.rs"
 
 [dependencies]
+tesseract-core.workspace = true
 tesseract-run.workspace = true
 eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
 clap = { version = "4", features = ["derive"] }

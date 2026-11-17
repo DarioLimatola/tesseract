@@ -4,7 +4,7 @@
 //! choice comes from a seed, so the same seed gives the same bits on every
 //! machine, backend and thread count.
 
-use crate::entity::{Entity, WORDS};
+use crate::entity::Entity;
 
 /// A small deterministic generator (xoshiro256** seeded through SplitMix64).
 #[derive(Clone, Debug)]
@@ -84,8 +84,8 @@ impl Rng {
     /// An entity of 4096 independent random bits.
     pub fn entity(&mut self) -> Entity {
         let mut e = Entity::ZERO;
-        for w in 0..WORDS {
-            e.0[w] = self.next_u64();
+        for word in &mut e.0 {
+            *word = self.next_u64();
         }
         e
     }
@@ -93,14 +93,14 @@ impl Rng {
     /// An entity in which each bit is 1 with probability `per_mille / 1000`.
     pub fn sparse_entity(&mut self, per_mille: u32) -> Entity {
         let mut e = Entity::ZERO;
-        for w in 0..WORDS {
-            let mut word = 0u64;
+        for word in &mut e.0 {
+            let mut bits = 0u64;
             for b in 0..64 {
                 if self.chance_per_mille(per_mille) {
-                    word |= 1 << b;
+                    bits |= 1 << b;
                 }
             }
-            e.0[w] = word;
+            *word = bits;
         }
         e
     }

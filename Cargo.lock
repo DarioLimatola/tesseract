@@ -2631,6 +2631,7 @@ dependencies = [
  "eframe",
  "png",
  "tempfile",
+ "tesseract-core",
  "tesseract-run",
 ]
 
