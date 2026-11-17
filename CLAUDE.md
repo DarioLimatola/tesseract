@@ -90,7 +90,7 @@ Run fmt, clippy and test before every commit. `.cargo/config.toml` builds for th
 
 Branch `first-draft`, pushed, 5 commits. `main` still holds only the initial commit.
 
-- 5 crates, 90 tests, fmt and clippy clean, green at six geometries: (2,7), (4,4), (8,3), (8,4), (16,3), (8,5).
+- 5 crates, 80 tests, fmt and clippy clean, green at six geometries: (2,7), (4,4), (8,3), (8,4), (16,3), (8,5).
 - Tests 0 to 3 pass at the default geometry: majority 100% (threshold 99%), recall 100% (99%), lookup 100% (95%). Numbers in `README.md`.
 - Geometry sweep measured, in `README.md` and `sweep_geometry.json`. Memory capacity is set by key width: a unit firing at vigilance `v` stays distinct from unrelated keys of `m` bits only while `v >= 0.5 + 2.5/sqrt(m)`; at 0.625 that needs `m >= 256`.
 - Next: step A of `tesseract-integrated-plan.md` section 4 — coordinates and references, then the scaling test.
