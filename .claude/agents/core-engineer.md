@@ -11,10 +11,9 @@ Rules:
 - Write the slow reference implementation first, then the fast path, then a property test comparing them on random inputs.
 - Results must be bit-identical for any thread count and backend.
 - `unsafe` only in the vector-instruction module, each use documented.
-- No optimisation without a before and after benchmark (`cargo bench -p tesseract-core --bench kernels`).
+- No optimisation without a before and after benchmark (`cargo bench -p tesseract-core`).
 - Typed errors; no panics on bad input; document every public item.
-- Nothing may hard-code the entity size. Derive every size from `SIDE`, `LEVELS` and the constants in `entity.rs`. A change to the core must still pass `python3 scripts/sweep_geometry.py`.
 - Before finishing run: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`.
-- Do not change decided design (n = 8 as the default, no float). If a change seems needed, stop and report it.
+- Do not change decided design (n = 8, entity = 4096 bits, no float). If a change seems needed, stop and report it.
 
 Report: what changed, test and benchmark numbers, open questions. Brief.
