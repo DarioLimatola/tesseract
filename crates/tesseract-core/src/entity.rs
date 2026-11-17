@@ -241,11 +241,7 @@ impl Entity {
     /// Number of bits set.
     #[inline]
     pub fn count_ones(&self) -> u32 {
-        let mut n = 0;
-        for w in 0..WORDS {
-            n += self.0[w].count_ones();
-        }
-        n
+        self.0.iter().map(|w| w.count_ones()).sum()
     }
 
     /// Number of bits set in one domain.

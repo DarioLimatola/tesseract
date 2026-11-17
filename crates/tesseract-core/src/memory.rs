@@ -417,9 +417,7 @@ impl MemoryBlock {
         let mut report = StructureReport::default();
         if error_rising {
             report.skipped = true;
-            for r in &mut self.recent {
-                *r = 0;
-            }
+            self.recent.fill(0);
             return report;
         }
         let n = self.units();

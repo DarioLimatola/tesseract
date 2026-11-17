@@ -9,18 +9,39 @@ env:
 
 jobs:
   checks:
+    # The gate: formatting and tests. These do not change when the compiler
+    # is released anew, so a red gate means the code is wrong.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: rustfmt
       - uses: Swatinem/rust-cache@v2
+      - name: Toolchain
+        run: rustc --version
       - name: Formatting
         run: cargo fmt --all -- --check
-      - name: Lints
-        run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Tests (kernel checks and tests 0 to 3)
         run: cargo test --workspace
       - name: Benchmarks build
         run: cargo bench --workspace --no-run
+
+  lints:
+    # Advisory, on purpose. `-D warnings` turns every lint into an error, so
+    # a new compiler release can turn this red with no change to the code —
+    # which is what happened on 2026-11-17, when the runner moved to 1.100
+    # while development was on 1.97. Keep it green, but never let it block a
+    # merge on its own.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Toolchain
+        run: cargo clippy --version
+      - name: Lints
+        run: cargo clippy --workspace --all-targets -- -D warnings
