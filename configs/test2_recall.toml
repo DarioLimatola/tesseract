@@ -1,0 +1,24 @@
+# Test 2: associative recall.
+# 1000 key-value pairs stored once each in a memory block of 4096 units,
+# then recalled from keys with 10% of their bits flipped.
+# Pass: at least 99%. Reference: exact nearest-neighbour search.
+name = "test2-recall"
+seed = 1
+
+[task]
+kind = "recall"
+pairs = 1000
+noise = 0.10
+curve = [0.0, 0.1, 0.2, 0.3, 0.35, 0.4]
+
+[model]
+kind = "memory"
+units = 4096
+vigilance = 0.625
+
+[structure]
+period = 0
+
+[budget]
+steps = 1000
+eval_every = 250

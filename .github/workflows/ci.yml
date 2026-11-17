@@ -1,0 +1,26 @@
+name: checks
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Formatting
+        run: cargo fmt --all -- --check
+      - name: Lints
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Tests (kernel checks and tests 0 to 3)
+        run: cargo test --workspace
+      - name: Benchmarks build
+        run: cargo bench --workspace --no-run

@@ -1,0 +1,34 @@
+[package]
+name = "tesseract-run"
+description = "Tesseract runner: one command on one config file, one run folder"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+name = "tesseract_run"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tesseract"
+path = "src/main.rs"
+
+[dependencies]
+tesseract-core.workspace = true
+tesseract-tasks.workspace = true
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+toml = "1"
+postcard = { version = "1", default-features = false, features = ["use-std"] }
+rayon = "1"
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

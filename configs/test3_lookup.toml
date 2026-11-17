@@ -1,0 +1,40 @@
+# Test 3: attention lookup.
+# 8 records and a query; the head must select the record with the query's
+# key and copy its value, while 3 other domains point to wrong records.
+# Pass: at least 95% on unseen sequences (chance 6.25%).
+name = "test3-lookup"
+seed = 1
+
+[task]
+kind = "lookup"
+records = 8
+values = 16
+keys = 64
+decoys = 3
+key_domain = 2
+value_domain = 5
+held_out = 2000
+
+[model]
+kind = "attention"
+match_init = 24
+select_margin = 32
+
+[model.matching]
+live_at = 24
+dormant_below = 8
+limit = 64
+
+[model.value]
+live_at = 12
+dormant_below = 4
+limit = 64
+
+[structure]
+period = 50
+connection_budget = 64
+
+[budget]
+steps = 5000
+eval_every = 250
+snapshot_every = 1000

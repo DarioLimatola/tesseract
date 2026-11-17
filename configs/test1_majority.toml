@@ -1,0 +1,30 @@
+# Test 1: majority of a hidden subset of inputs.
+# One counting unit; its mask must find the 65 relevant inputs among 4095.
+# Pass: at least 99% on held-out examples. Baseline: chance.
+name = "test1-majority"
+seed = 1
+
+[task]
+kind = "majority"
+subset = 65
+hidden_signs = true
+held_out = 10000
+
+[model]
+kind = "unit"
+bias_step = 8
+margin = 0
+
+[model.inputs]
+live_at = 300
+dormant_below = 150
+limit = 1000
+
+[structure]
+period = 500
+connection_budget = 16
+
+[budget]
+steps = 40000
+eval_every = 2000
+snapshot_every = 10000
